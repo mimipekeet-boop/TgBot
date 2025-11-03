@@ -1,0 +1,9 @@
+tests/
+*.json
+*.md
+virt/
+*.env
+*.txt
+*.exe
+*.db
+*.session*

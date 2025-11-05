@@ -4,7 +4,6 @@ import json
 import logging
 import re
 import time
-import sqlite3
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Union
 from telethon import TelegramClient, events
@@ -79,7 +78,7 @@ MEDIA_LOG = "media_forwarding.txt"
 SETTINGS_FILE = "user_settings.json"
 MESSAGE_TRACKING_FILE = "message_tracking.json"
 DISCORD_ROUTES_FILE = "discord_routes.json"
-MESSAGE_MAPPINGS_DB = "message_mappings.db"  # SQLite database for message mappings
+MESSAGE_MAPPINGS_FILE = "message_mappings.json"  # SQLite database for message mappings
 
 # Media statistics
 media_forwarding_stats = {}
@@ -96,53 +95,67 @@ channel_management_states = {}
 keyword_management_states = {}
 media_filter_states = {}
 
-# ========= ENHANCED MESSAGE MAPPING SYSTEM (SQLITE) =========
-def setup_message_mappings_db():
-    """Initialize SQLite database for message mappings"""
+
+# ========= ENHANCED MESSAGE MAPPING SYSTEM (JSON) =========
+
+
+def setup_message_mappings_file():
+    """Initialize JSON file for message mappings"""
     try:
-        conn = sqlite3.connect(MESSAGE_MAPPINGS_DB)
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS message_mappings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                source_chat_id INTEGER NOT NULL,
-                source_message_id INTEGER NOT NULL,
-                destination_chat_key TEXT NOT NULL,
-                destination_message_id INTEGER NOT NULL,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_id, source_chat_id, source_message_id, destination_chat_key)
-            )
-        ''')
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_user_source 
-            ON message_mappings (user_id, source_chat_id, source_message_id)
-        ''')
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_user_destination 
-            ON message_mappings (user_id, destination_chat_key, destination_message_id)
-        ''')
-        conn.commit()
-        conn.close()
-        log_activity("Message mappings database initialized")
+        if not os.path.exists(MESSAGE_MAPPINGS_FILE):
+            with open(MESSAGE_MAPPINGS_FILE, "w", encoding="utf-8") as f:
+                json.dump({}, f, indent=2, ensure_ascii=False)
+            log_activity("Message mappings JSON file initialized")
+        else:
+            log_activity("Message mappings JSON file already exists")
     except Exception as e:
-        log_error("Failed to initialize message mappings database", e)
+        log_error("Failed to initialize message mappings JSON file", e)
+
+def load_message_mappings() -> Dict:
+    """Load message mappings from JSON file"""
+    try:
+        if os.path.exists(MESSAGE_MAPPINGS_FILE):
+            with open(MESSAGE_MAPPINGS_FILE, "r", encoding="utf-8") as f:
+                mappings = json.load(f)
+            return mappings
+        else:
+            return {}
+    except Exception as e:
+        log_error(f"Failed to load message mappings from {MESSAGE_MAPPINGS_FILE}", e)
+        return {}
+
+def save_message_mappings(mappings: Dict) -> None:
+    """Save message mappings to JSON file"""
+    try:
+        with open(MESSAGE_MAPPINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(mappings, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        log_error(f"Failed to save message mappings to {MESSAGE_MAPPINGS_FILE}", e)
 
 def update_message_mapping(user_id_str: str, source_chat_id: int, source_message_id: int, 
                           destination_chat_key: str, destination_message_id: int) -> None:
-    """Update message mapping for tracking source->destination messages using SQLite"""
+    """Update message mapping for tracking source->destination messages using JSON"""
     try:
-        conn = sqlite3.connect(MESSAGE_MAPPINGS_DB)
-        cursor = conn.cursor()
+        mappings = load_message_mappings()
         
-        cursor.execute('''
-            INSERT OR REPLACE INTO message_mappings 
-            (user_id, source_chat_id, source_message_id, destination_chat_key, destination_message_id)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_id_str, source_chat_id, source_message_id, destination_chat_key, destination_message_id))
+        # Initialize user structure if not exists
+        if user_id_str not in mappings:
+            mappings[user_id_str] = {}
         
-        conn.commit()
-        conn.close()
+        # Initialize source chat structure if not exists
+        source_chat_str = str(source_chat_id)
+        if source_chat_str not in mappings[user_id_str]:
+            mappings[user_id_str][source_chat_str] = {}
+        
+        # Initialize source message structure if not exists
+        source_msg_str = str(source_message_id)
+        if source_msg_str not in mappings[user_id_str][source_chat_str]:
+            mappings[user_id_str][source_chat_str][source_msg_str] = {}
+        
+        # Update the destination mapping
+        mappings[user_id_str][source_chat_str][source_msg_str][destination_chat_key] = destination_message_id
+        
+        save_message_mappings(mappings)
         
         log_activity(f"Message mapping updated: user {user_id_str}, source {source_chat_id}:{source_message_id} -> dest {destination_chat_key}:{destination_message_id}")
         
@@ -150,20 +163,20 @@ def update_message_mapping(user_id_str: str, source_chat_id: int, source_message
         log_error(f"Error updating message mapping for user {user_id_str}", e)
 
 def get_destination_message_ids(user_id_str: str, source_chat_id: int, source_message_id: int) -> Dict[str, int]:
-    """Get all destination message IDs for a source message from SQLite"""
+    """Get all destination message IDs for a source message from JSON"""
     try:
-        conn = sqlite3.connect(MESSAGE_MAPPINGS_DB)
-        cursor = conn.cursor()
+        mappings = load_message_mappings()
         
-        cursor.execute('''
-            SELECT destination_chat_key, destination_message_id FROM message_mappings 
-            WHERE user_id = ? AND source_chat_id = ? AND source_message_id = ?
-        ''', (user_id_str, source_chat_id, source_message_id))
+        source_chat_str = str(source_chat_id)
+        source_msg_str = str(source_message_id)
         
-        results = cursor.fetchall()
-        conn.close()
+        # Navigate through the nested structure
+        user_mappings = mappings.get(user_id_str, {})
+        chat_mappings = user_mappings.get(source_chat_str, {})
+        message_mappings = chat_mappings.get(source_msg_str, {})
         
-        return {row[0]: row[1] for row in results}
+        return message_mappings
+        
     except Exception as e:
         log_error(f"Error getting destination message IDs for user {user_id_str}", e)
         return {}
@@ -171,18 +184,28 @@ def get_destination_message_ids(user_id_str: str, source_chat_id: int, source_me
 def remove_message_mapping(user_id_str: str, source_chat_id: int, source_message_id: int) -> None:
     """Remove message mapping when source message is deleted"""
     try:
-        conn = sqlite3.connect(MESSAGE_MAPPINGS_DB)
-        cursor = conn.cursor()
+        mappings = load_message_mappings()
         
-        cursor.execute('''
-            DELETE FROM message_mappings 
-            WHERE user_id = ? AND source_chat_id = ? AND source_message_id = ?
-        ''', (user_id_str, source_chat_id, source_message_id))
+        source_chat_str = str(source_chat_id)
+        source_msg_str = str(source_message_id)
         
-        conn.commit()
-        conn.close()
-        
-        log_activity(f"Message mapping removed: user {user_id_str}, source {source_chat_id}:{source_message_id}")
+        # Check if the mapping exists
+        if (user_id_str in mappings and 
+            source_chat_str in mappings[user_id_str] and 
+            source_msg_str in mappings[user_id_str][source_chat_str]):
+            
+            # Remove the specific message mapping
+            del mappings[user_id_str][source_chat_str][source_msg_str]
+            
+            # Clean up empty structures
+            if not mappings[user_id_str][source_chat_str]:
+                del mappings[user_id_str][source_chat_str]
+            if not mappings[user_id_str]:
+                del mappings[user_id_str]
+            
+            save_message_mappings(mappings)
+            
+            log_activity(f"Message mapping removed: user {user_id_str}, source {source_chat_id}:{source_message_id}")
             
     except Exception as e:
         log_error(f"Error removing message mapping for user {user_id_str}", e)
@@ -190,38 +213,25 @@ def remove_message_mapping(user_id_str: str, source_chat_id: int, source_message
 def cleanup_orphaned_mappings() -> None:
     """Clean up orphaned message mappings (users/channels that no longer exist)"""
     try:
-        conn = sqlite3.connect(MESSAGE_MAPPINGS_DB)
-        cursor = conn.cursor()
-        
+        mappings = load_message_mappings()
         fresh_settings = load_settings()
         
-        # Get all unique user IDs from mappings
-        cursor.execute('SELECT DISTINCT user_id FROM message_mappings')
-        users_in_mappings = [row[0] for row in cursor.fetchall()]
-        
         deleted_count = 0
+        users_to_remove = []
         
-        for user_id in users_in_mappings:
+        for user_id_str, user_mappings in mappings.items():
             # Check if user still exists in settings
-            if user_id not in fresh_settings:
-                # Delete all mappings for this user
-                cursor.execute('DELETE FROM message_mappings WHERE user_id = ?', (user_id,))
-                deleted_count += cursor.rowcount
+            if user_id_str not in fresh_settings:
+                users_to_remove.append(user_id_str)
+                deleted_count += sum(len(chat_mappings) for chat_mappings in user_mappings.values())
                 continue
             
             # Check if source channels still exist in user's routes
-            user_routes = fresh_settings[user_id].get("routes", {})
+            user_routes = fresh_settings[user_id_str].get("routes", {})
             source_channels = set(user_routes.keys())
             
-            # Get all source channels for this user from mappings
-            cursor.execute('''
-                SELECT DISTINCT source_chat_id FROM message_mappings 
-                WHERE user_id = ?
-            ''', (user_id,))
-            user_source_channels = [str(row[0]) for row in cursor.fetchall()]
-            
-            # Delete mappings for channels that no longer exist in routes
-            for source_chat_str in user_source_channels:
+            chats_to_remove = []
+            for source_chat_str, chat_mappings in user_mappings.items():
                 channel_found = False
                 for route_source in source_channels:
                     # Handle both string and integer comparisons
@@ -233,16 +243,19 @@ def cleanup_orphaned_mappings() -> None:
                         break
                 
                 if not channel_found:
-                    cursor.execute('''
-                        DELETE FROM message_mappings 
-                        WHERE user_id = ? AND source_chat_id = ?
-                    ''', (user_id, int(source_chat_str)))
-                    deleted_count += cursor.rowcount
+                    chats_to_remove.append(source_chat_str)
+                    deleted_count += len(chat_mappings)
+            
+            # Remove orphaned channels
+            for chat_str in chats_to_remove:
+                del user_mappings[chat_str]
         
-        conn.commit()
-        conn.close()
+        # Remove orphaned users
+        for user_id_str in users_to_remove:
+            del mappings[user_id_str]
         
         if deleted_count > 0:
+            save_message_mappings(mappings)
             log_activity(f"Cleaned up {deleted_count} orphaned message mappings")
     
     except Exception as e:
@@ -285,6 +298,155 @@ class DeletionPerformance:
 # Global performance tracker
 deletion_performance = DeletionPerformance()
 
+# ========= MESSAGE EDIT HANDLER =========
+@client.on(events.MessageEdited)
+async def handle_message_edited(event):
+    """Handle message edits and update corresponding messages in target channels"""
+    try:
+        edit_start_time = time.time()
+        
+        # Get the chat where edit occurred
+        try:
+            chat = await event.get_chat()
+        except Exception as e:
+            log_error("Could not get chat from edit event", e)
+            return
+            
+        edited_message_id = event.message.id
+        new_text = event.message.message or ""
+        
+        log_activity(f"✏️ MESSAGE EDIT: Channel {getattr(chat, 'id', 'unknown')} - Message ID: {edited_message_id}")
+        
+        # Refresh settings to get current user configurations
+        fresh_settings = load_settings()
+        
+        # Process for each user CONCURRENTLY for faster processing
+        user_tasks = []
+        for user_id_str, settings in fresh_settings.items():
+            try:
+                routes = settings.get("routes", {})
+                
+                # Check if this chat is a source channel for any of the user's routes
+                for source_channel, targets in routes.items():
+                    if stored_value_matches_chat(source_channel, chat):
+                        
+                        # Create concurrent edit tasks for each target
+                        task = asyncio.create_task(
+                            update_corresponding_messages(
+                                user_id_str, chat.id, edited_message_id, new_text, targets, event
+                            )
+                        )
+                        user_tasks.append(task)
+                        break
+            except Exception as e:
+                log_error(f"Error processing message edit for user {user_id_str}", e)
+        
+        # Wait for all edit tasks to complete
+        if user_tasks:
+            await asyncio.gather(*user_tasks, return_exceptions=True)
+        
+        edit_time = time.time() - edit_start_time
+        log_activity(f"✅ EDIT COMPLETE: Processed message {edited_message_id} in {edit_time:.3f} seconds")
+       
+    except Exception as e:
+        log_error("Critical error in message edit handler", e)
+
+async def update_corresponding_messages(user_id_str: str, source_chat_id: int, source_message_id: int, 
+                                      new_text: str, targets: List[str], event) -> None:
+    """Update corresponding messages in target channels when source message is edited"""
+    try:
+        message_start_time = time.time()
+        
+        # Get all destination message IDs for this source message
+        destination_messages = get_destination_message_ids(user_id_str, source_chat_id, source_message_id)
+        
+        if not destination_messages:
+            log_activity(f"❌ No message mappings found for edit - user {user_id_str}, source {source_chat_id}:{source_message_id}")
+            return
+        
+        updated_count = 0
+        error_count = 0
+        permission_errors = 0
+        
+        # Create edit tasks for ALL destinations in parallel
+        edit_tasks = []
+        entity_cache = {}  # Cache entities to avoid duplicate lookups
+        
+        for target_chat_key, destination_message_id in destination_messages.items():
+            task = asyncio.create_task(
+                update_single_message(
+                    target_chat_key, destination_message_id, new_text, user_id_str, 
+                    source_message_id, entity_cache, event
+                )
+            )
+            edit_tasks.append(task)
+        
+        # Wait for all edits to complete
+        results = await asyncio.gather(*edit_tasks, return_exceptions=True)
+        
+        # Count results
+        for result in results:
+            if isinstance(result, Exception):
+                error_count += 1
+                if isinstance(result, (ChannelPrivateError, ChatAdminRequiredError, ChatWriteForbiddenError)):
+                    permission_errors += 1
+            elif result is True:
+                updated_count += 1
+            else:
+                error_count += 1
+        
+        message_time = time.time() - message_start_time
+        log_activity(f"📊 User {user_id_str}: Updated {updated_count}/{len(destination_messages)} messages in {message_time:.3f}s (Errors: {error_count}, Permissions: {permission_errors})")
+        
+    except Exception as e:
+        log_error(f"Error in update_corresponding_messages for user {user_id_str}", e)
+
+async def update_single_message(target_chat_key: str, destination_message_id: int, new_text: str,
+                              user_id_str: str, source_message_id: int, 
+                              entity_cache: dict, event) -> bool:
+    """Update a single message with new text/content"""
+    try:
+        # Check cache first
+        if target_chat_key not in entity_cache:
+            try:
+                # Check if target_chat_key is a numeric ID or a username
+                if target_chat_key.lstrip('-').isdigit():
+                    # It's a numeric channel ID
+                    target_chat_id = int(target_chat_key)
+                    target_entity = await client.get_entity(target_chat_id)
+                else:
+                    # It's a username
+                    if not target_chat_key.startswith('@'):
+                        target_chat_key_with_at = '@' + target_chat_key
+                    else:
+                        target_chat_key_with_at = target_chat_key
+                    target_entity = await client.get_entity(target_chat_key_with_at)
+                
+                entity_cache[target_chat_key] = target_entity
+            except Exception as resolve_error:
+                log_error(f"Cannot resolve channel {target_chat_key} for user {user_id_str}", resolve_error)
+                return False
+        else:
+            target_entity = entity_cache[target_chat_key]
+        
+        # Check if the message has media
+        if event.message.media:
+            # For media messages, we can only edit the caption
+            await client.edit_message(target_entity, destination_message_id, text=new_text)
+        else:
+            # For text messages, edit the entire message
+            await client.edit_message(target_entity, destination_message_id, text=new_text)
+        
+        log_activity(f"✅ MESSAGE UPDATED: User {user_id_str} - Target {target_chat_key}:{destination_message_id} (Source: {source_message_id})")
+        return True
+        
+    except (ChannelPrivateError, ChatAdminRequiredError, ChatWriteForbiddenError) as e:
+        log_error(f"❌ PERMISSION ERROR: Cannot edit message in {target_chat_key} for user {user_id_str}. Bot may lack edit permissions.", e)
+        return False
+    except Exception as e:
+        log_error(f"❌ EDIT ERROR: Error updating message in {target_chat_key} for user {user_id_str}", e)
+        return False
+
 # ========= ENHANCED INSTANT MESSAGE DELETION HANDLER =========
 @client.on(events.MessageDeleted)
 async def handle_message_deleted(event):
@@ -306,12 +468,13 @@ async def handle_message_deleted(event):
         log_activity(f"🚨 INSTANT DELETION: Channel {getattr(chat, 'id', 'unknown')} - Message IDs: {deleted_message_ids}")
         
         # Clean up orphaned mappings first
-        cleanup_orphaned_mappings()
+
         
         # Refresh settings to get current user configurations
         fresh_settings = load_settings()
         
         # Process for each user CONCURRENTLY for faster processing
+        
         user_tasks = []
         for user_id_str, settings in fresh_settings.items():
             try:
@@ -339,7 +502,7 @@ async def handle_message_deleted(event):
         
         deletion_time = time.time() - deletion_start_time
         log_activity(f"✅ DELETION COMPLETE: Processed {len(deleted_message_ids)} messages in {deletion_time:.3f} seconds")
-                
+       
     except Exception as e:
         log_error("Critical error in message deletion handler", e)
 
@@ -431,7 +594,7 @@ async def delete_single_message_instant(target_chat_key: str, destination_messag
             target_entity = entity_cache[target_chat_key]
         
         # Delete the message in destination channel
-        await client.delete_messages(target_entity, [destination_message_id])
+        await client.delete_messages(target_entity, [destination_message_id],revoke=True)
         
         log_activity(f"✅ INSTANT DELETE: User {user_id_str} - Target {target_chat_key}:{destination_message_id} (Source: {source_message_id})")
         return True
@@ -2052,7 +2215,7 @@ async def show_keyword_filtering_help(update: Update) -> None:
         "• <b>Blocked Keywords:</b> NONE can be present in message text\n"
         "• <b>Case Insensitive:</b> Filtering is not case-sensitive\n"
         "• <b>Text Messages Only:</b> Only messages with text content are filtered\n\n"
-        "**📝 Examples:**\n"
+        "📝 **Examples:**\n"
         "• <b>Required:</b> 'news', 'update' → Message must contain EITHER word\n"
         "• <b>Blocked:</b> 'spam', 'advertisement' → Message must contain NEITHER word\n"
         "• <b>Combined:</b> Required 'important', Blocked 'test' → Message must contain 'important' but NOT 'test'\n"
@@ -2060,7 +2223,7 @@ async def show_keyword_filtering_help(update: Update) -> None:
         "• <b>Media-only messages:</b> Only blocked if required keywords exist\n"
         "• <b>Empty messages:</b> Same as media-only messages\n"
         "• <b>No filters set:</b> All messages pass through\n\n"
-        "**⚙️ Usage Tips:**\n"
+        "⚙️ **Usage Tips:**\n"
         "• Use specific words for better accuracy\n"
         "• Start with a few keywords and adjust as needed\n"
         "• Test your filters with different message types\n"
@@ -4467,8 +4630,7 @@ async def handle_confirm_deletion(update: Update) -> None:
     user_settings[user_id_str]["disabled_routes"] = disabled_routes
     save_settings()
     
-    # Clean up message mappings for deleted routes
-    cleanup_orphaned_mappings()
+
     
     await update.callback_query.answer(f"🗑️ Deleted {deleted_count} routes")
     
@@ -5124,17 +5286,16 @@ def setup_bot():
     
     return application
 
-# ========= MAIN FUNCTION =========
 async def main():
     """Main function to start both Telegram client and bot"""
     try:
-        # Initialize the message mappings database
-        setup_message_mappings_db()
-        
         # Start the Telegram client
         await client.start()
         log_activity("Telegram client started successfully")
+        # cleanup_orphaned_mappings()
         
+        # Load message mappings for deletion sync
+        message_mappings = load_message_mappings()
         # Setup and start the bot
         application = setup_bot()
         

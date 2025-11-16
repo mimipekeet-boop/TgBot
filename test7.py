@@ -360,10 +360,82 @@ class DeletionPerformance:
 # Global performance tracker
 deletion_performance = DeletionPerformance()
 
-# ========= MESSAGE EDIT HANDLER =========
+# ========= DISCORD MESSAGE EDIT HANDLER =========
+async def edit_discord_message(discord_channel_id: str, discord_message_id: str, new_text: str) -> bool:
+    """Edit an existing Discord message"""
+    if not DISCORD_TOKEN:
+        log_error("No Discord token configured for message editing", None)
+        return False
+
+    url = f"https://discord.com/api/v10/channels/{discord_channel_id}/messages/{discord_message_id}"
+
+    headers = {
+        "Authorization": f"Bot {DISCORD_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    # Truncate message if too long for Discord
+    if len(new_text) > 2000:
+        new_text = new_text[:1997] + "..."
+
+    payload = {
+        "content": new_text
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.patch(url, json=payload, headers=headers) as resp:
+                if resp.status == 200:
+                    log_activity(f"Discord message edited successfully: {discord_channel_id}/{discord_message_id}")
+                    return True
+                else:
+                    text = await resp.text()
+                    log_error(f"Discord message edit failed {resp.status}", text)
+                    return False
+    except Exception as e:
+        log_error("Discord edit error", e)
+        return False
+
+async def update_discord_messages(user_id_str: str, source_chat_id: int, source_message_id: int, 
+                                 new_text: str, discord_messages: Dict[str, str]) -> None:
+    """Update corresponding Discord messages when source message is edited"""
+    try:
+        if not discord_messages:
+            return
+        
+        updated_count = 0
+        error_count = 0
+        
+        # Create edit tasks for ALL Discord destinations in parallel
+        edit_tasks = []
+        
+        for discord_channel_id, discord_message_id in discord_messages.items():
+            task = asyncio.create_task(
+                edit_discord_message(discord_channel_id, discord_message_id, new_text)
+            )
+            edit_tasks.append(task)
+        
+        # Wait for all edits to complete
+        results = await asyncio.gather(*edit_tasks, return_exceptions=True)
+        
+        # Count results
+        for result in results:
+            if isinstance(result, Exception):
+                error_count += 1
+            elif result is True:
+                updated_count += 1
+            else:
+                error_count += 1
+        
+        log_activity(f"📊 Discord edits: User {user_id_str}: Updated {updated_count}/{len(discord_messages)} Discord messages (Errors: {error_count})")
+        
+    except Exception as e:
+        log_error(f"Error in update_discord_messages for user {user_id_str}", e)
+
+# ========= ENHANCED MESSAGE EDIT HANDLER WITH DISCORD SUPPORT =========
 @client.on(events.MessageEdited)
 async def handle_message_edited(event):
-    """Handle message edits and update corresponding messages in target channels"""
+    """Handle message edits and update corresponding messages in target channels (Telegram and Discord)"""
     try:
         edit_start_time = time.time()
         
@@ -381,9 +453,33 @@ async def handle_message_edited(event):
         
         # Refresh settings to get current user configurations
         fresh_settings = load_settings()
+        discord_routes = load_discord_routes()
         
         # Process for each user CONCURRENTLY for faster processing
         user_tasks = []
+        
+        # Process Discord routes
+        for user_id_str, routes in discord_routes.items():
+            try:
+                # Check if this chat is a source channel for any of the user's Discord routes
+                for source_channel, targets in routes.items():
+                    if stored_value_matches_chat(source_channel, chat):
+                        # Get Discord message mappings for this source message
+                        discord_messages = get_discord_message_mappings(user_id_str, chat.id, edited_message_id)
+                        
+                        if discord_messages:
+                            # Create concurrent edit tasks for Discord
+                            task = asyncio.create_task(
+                                update_discord_messages(
+                                    user_id_str, chat.id, edited_message_id, new_text, discord_messages
+                                )
+                            )
+                            user_tasks.append(task)
+                        break
+            except Exception as e:
+                log_error(f"Error processing Discord message edit for user {user_id_str}", e)
+        
+        # Process Telegram routes
         for user_id_str, settings in fresh_settings.items():
             try:
                 routes = settings.get("routes", {})
@@ -558,7 +654,6 @@ async def handle_message_deleted(event):
                     break   # keep this (only break the inner loop, not the outer one)
 
 
-
         # ---------- SECOND BLOCK ----------
         for user_id_str, settings in fresh_settings.items():
             try:
@@ -618,7 +713,7 @@ async def delete_corresponding_messages_instant(user_id_str: str, source_chat_id
         
         # Delete Telegram messages
         for target_chat_key, destination_message_id in destination_messages.items():
-    
+            print("deleted")
             task = asyncio.create_task(
                 delete_single_telegram_message_instant(
                     target_chat_key, destination_message_id, user_id_str, 
@@ -897,6 +992,7 @@ async def start_discord_route_management(update: Update) -> None:
             "• You need Discord bot token with required permissions\n"
             "• The bot must have access to the Discord channels\n"
             "• 🗑️ <b>Message deletion sync is supported!</b> - When a message is deleted in Telegram, it will also be deleted in Discord"
+            "• ✏️ <b>Message editing sync is supported!</b> - When a message is edited in Telegram, it will also be edited in Discord"
         )
         
         keyboard = get_discord_management_keyboard()
@@ -939,7 +1035,7 @@ async def start_add_discord_route(update: Update) -> None:
                 "1. Go to Discord channel settings\n"
                 "2. Create webhook and copy the URL\n"
                 "3. Add to .env as DISCORD_WEBHOOK_URL\n\n"
-                "⚠️ <b>Important:</b> For message deletion sync to work, you MUST use DISCORD_TOKEN (webhooks cannot delete messages)\n\n"
+                "⚠️ <b>Important:</b> For message deletion and editing sync to work, you MUST use DISCORD_TOKEN (webhooks cannot delete or edit messages)\n\n"
                 "Once configured, restart the bot and try again."
             )
             await safe_edit_message(update, text, get_discord_management_keyboard())
@@ -955,11 +1051,11 @@ async def start_add_discord_route(update: Update) -> None:
                 "• Sending text and images\n\n"
                 "❌ <b>What doesn't work:</b>\n"
                 "• Message deletion sync (requires bot token)\n"
-                "• Message editing\n\n"
+                "• Message editing sync (requires bot token)\n\n"
                 "💡 <b>To enable full functionality:</b>\n"
                 "1. Switch to using DISCORD_TOKEN instead of webhook\n"
-                "2. This enables message deletion synchronization\n"
-                "3. The bot will delete Discord messages when Telegram messages are deleted\n\n"
+                "2. This enables message deletion and editing synchronization\n"
+                "3. The bot will delete/edit Discord messages when Telegram messages are deleted/edited\n\n"
                 "Do you want to continue with webhook-only mode?"
             )
             
@@ -996,7 +1092,7 @@ async def start_add_discord_route(update: Update) -> None:
             "🔍 <b>Select Source Channel for Discord</b>\n\n"
             "Choose the Telegram channel where messages will come from:\n\n"
             f"📊 Available Channels: <b>{len(available_channels)}</b>\n\n"
-            "💡 <b>Deletion Sync:</b> When a message is deleted in this Telegram channel, it will also be deleted in the Discord channel."
+            "💡 <b>Sync Features:</b> When a message is deleted or edited in this Telegram channel, it will also be deleted/edited in the Discord channel."
         )
         
         keyboard = create_discord_source_selection_keyboard(available_channels, 0)
@@ -1040,7 +1136,7 @@ async def handle_continue_webhook_discord(update: Update) -> None:
             f"📊 Available Channels: <b>{len(available_channels)}</b>\n\n"
             "⚠️ <b>Webhook Mode Limitations:</b>\n"
             "• Message deletion sync is not available\n"
-            "• Message editing is not available\n"
+            "• Message editing sync is not available\n"
             "• Only forwarding of new messages works"
         )
         
@@ -1114,9 +1210,9 @@ async def handle_discord_source_selection(update: Update, channel_key: str, page
     # Check if we're in webhook-only mode
     webhook_warning = ""
     if state.get("webhook_only"):
-        webhook_warning = "\n\n⚠️ <b>Webhook Mode:</b> Message deletion sync will not be available."
+        webhook_warning = "\n\n⚠️ <b>Webhook Mode:</b> Message deletion and editing sync will not be available."
     else:
-        webhook_warning = "\n\n✅ <b>Bot Token Mode:</b> Message deletion sync is enabled!"
+        webhook_warning = "\n\n✅ <b>Bot Token Mode:</b> Message deletion and editing sync are enabled!"
     
     text = (
         f"✅ <b>Source Channel Selected:</b> {channel_display}\n\n"
@@ -1201,17 +1297,17 @@ async def complete_discord_route_creation(update: Update, user_id: int) -> None:
             channel_display = f"@{channel_info.get('username', '')}" if channel_info.get('username') else f"{channel_info.get('title', 'Unknown')} (ID: {channel_info.get('id', '')})"
             
             # Add deletion sync info
-            deletion_info = ""
+            sync_info = ""
             if is_webhook_only:
-                deletion_info = "❌ <b>Deletion Sync:</b> Not available (webhook mode)"
+                sync_info = "❌ <b>Deletion & Editing Sync:</b> Not available (webhook mode)"
             else:
-                deletion_info = "✅ <b>Deletion Sync:</b> Enabled (bot token mode)"
+                sync_info = "✅ <b>Deletion & Editing Sync:</b> Enabled (bot token mode)"
             
             text = (
                 f"✅ <b>Discord Route Added Successfully!</b>\n\n"
                 f"<b>Telegram Source:</b> {channel_display}\n"
                 f"<b>Discord Channel:</b> {discord_channel_name} (ID: {discord_channel_id})\n"
-                f"{deletion_info}\n\n"
+                f"{sync_info}\n\n"
                 f"💡 <b>What happens now:</b>\n"
                 f"• Messages from the Telegram channel will be forwarded to the Discord channel\n"
                 f"• Text messages and images are supported\n"
@@ -1251,7 +1347,7 @@ async def view_discord_routes(update: Update) -> None:
         else:
             lines = []
             total_routes = 0
-            deletion_sync_count = 0
+            sync_enabled_count = 0
             
             for source_channel, channels in user_routes.items():
                 # Get channel display name
@@ -1266,19 +1362,19 @@ async def view_discord_routes(update: Update) -> None:
                     channel_lines.append(f"  • {channel['channel_name']} (ID: {channel['channel_id']}) {sync_status}")
                     total_routes += 1
                     if not channel.get("webhook_only"):
-                        deletion_sync_count += 1
+                        sync_enabled_count += 1
                 
                 lines.append(f"📢 {channel_display}:")
                 lines.extend(channel_lines)
                 lines.append("")  # Empty line for spacing
             
-            sync_info = f"🗑️ Deletion Sync: {deletion_sync_count}/{total_routes} routes"
+            sync_info = f"🔄 Sync Features: {sync_enabled_count}/{total_routes} routes"
             
             text = (
                 f"🔗 <b>Your Discord Routes</b>\n\n"
                 f"📊 Total Routes: <b>{total_routes}</b>\n"
                 f"{sync_info}\n\n"
-                "✅ = Deletion sync enabled | ❌ = Webhook mode (no deletion sync)\n\n" +
+                "✅ = Deletion & editing sync enabled | ❌ = Webhook mode (no sync)\n\n" +
                 "\n".join(lines) +
                 f"\n💡 Messages from these Telegram channels will be forwarded to the corresponding Discord channels."
             )
@@ -1329,7 +1425,7 @@ async def start_delete_discord_route(update: Update) -> None:
             f"🗑️ <b>Delete Discord Route</b>\n\n"
             f"📊 Found <b>{total_routes}</b> Discord routes.\n\n"
             "Select a route to delete:\n\n"
-            "💡 <b>Note:</b> Deleting a route will stop forwarding messages from the Telegram channel to the Discord channel and remove deletion sync."
+            "💡 <b>Note:</b> Deleting a route will stop forwarding messages from the Telegram channel to the Discord channel and remove deletion/editing sync."
         )
         
         keyboard = create_discord_deletion_keyboard(user_routes, user_id, 0)
@@ -1482,7 +1578,7 @@ async def handle_discord_deletion_pagination(update: Update, page: int) -> None:
             f"🗑️ <b>Delete Discord Route</b>\n\n"
             f"📊 Found <b>{total_routes}</b> Discord routes.\n\n"
             "Select a route to delete:\n\n"
-            "💡 <b>Note:</b> Deleting a route will stop forwarding messages from the Telegram channel to the Discord channel and remove deletion sync."
+            "💡 <b>Note:</b> Deleting a route will stop forwarding messages from the Telegram channel to the Discord channel and remove deletion/editing sync."
         )
         
         keyboard = create_discord_deletion_keyboard(user_routes, user_id, page)
@@ -1504,11 +1600,11 @@ async def show_discord_settings(update: Update) -> None:
         total_routes = sum(len(channels) for channels in user_routes.values())
         
         # Count routes with deletion sync
-        deletion_sync_routes = 0
+        sync_enabled_routes = 0
         for source_channel, channels in user_routes.items():
             for channel in channels:
                 if not channel.get("webhook_only"):
-                    deletion_sync_routes += 1
+                    sync_enabled_routes += 1
         
         status_emoji = "✅" if discord_configured else "❌"
         status_text = "Configured" if discord_configured else "Not Configured"
@@ -1517,21 +1613,21 @@ async def show_discord_settings(update: Update) -> None:
             f"⚙️ <b>Discord Integration Settings</b>\n\n"
             f"🔧 Status: {status_emoji} {status_text}\n"
             f"📊 Your Discord Routes: {total_routes}\n"
-            f"🗑️ Routes with Deletion Sync: {deletion_sync_routes}/{total_routes}\n\n"
+            f"🔄 Routes with Sync Features: {sync_enabled_routes}/{total_routes}\n\n"
         )
         
         if discord_configured:
             if DISCORD_TOKEN:
                 method = "Bot Token"
-                deletion_status = "✅ Enabled"
+                sync_status = "✅ Enabled"
             else:
                 method = "Webhook"
-                deletion_status = "❌ Disabled (webhooks cannot delete messages)"
+                sync_status = "❌ Disabled (webhooks cannot delete/edit messages)"
                 
             text += (
                 f"✅ <b>Discord integration is properly configured.</b>\n"
                 f"📡 Method: {method}\n"
-                f"🗑️ Message Deletion Sync: {deletion_status}\n\n"
+                f"🔄 Message Sync: {sync_status}\n\n"
                 "💡 <b>What you can do:</b>\n"
                 "• Forward messages from Telegram to Discord channels\n"
                 "• Support for text and image messages\n"
@@ -1541,22 +1637,25 @@ async def show_discord_settings(update: Update) -> None:
             
             if DISCORD_TOKEN:
                 text += (
-                    "• ✅ <b>Message deletion synchronization</b>\n\n"
+                    "• ✅ <b>Message deletion synchronization</b>\n"
+                    "• ✅ <b>Message editing synchronization</b>\n\n"
                     "🔧 <b>Required Permissions:</b>\n"
                     "• Your Discord bot must be invited to the server\n"
                     "• Bot must have 'Send Messages' permission in target channels\n"
                     "• Bot must have 'Attach Files' permission for media\n"
                     "• Bot must have 'Embed Links' permission for rich content\n"
-                    "• Bot must have 'Manage Messages' permission for deletion sync"
+                    "• Bot must have 'Manage Messages' permission for deletion sync\n"
+                    "• Bot must have 'Read Message History' permission for editing"
                 )
             else:
                 text += (
-                    "• ❌ <b>Message deletion synchronization NOT available</b>\n\n"
+                    "• ❌ <b>Message deletion synchronization NOT available</b>\n"
+                    "• ❌ <b>Message editing synchronization NOT available</b>\n\n"
                     "🔧 <b>Webhook Setup:</b>\n"
                     "• Webhook URL is configured\n"
                     "• No additional permissions needed\n"
                     "• Make sure webhook is not deleted from Discord\n"
-                    "• Switch to bot token for deletion sync functionality"
+                    "• Switch to bot token for full sync functionality"
                 )
         else:
             text += (
@@ -1574,7 +1673,7 @@ async def show_discord_settings(update: Update) -> None:
                 "1. Go to Discord channel settings → Integrations → Webhooks\n"
                 "2. Create a webhook and copy the URL\n"
                 "3. Add to .env as DISCORD_WEBHOOK_URL\n\n"
-                "⚠️ <b>Important:</b> Only bot tokens support message deletion synchronization!"
+                "⚠️ <b>Important:</b> Only bot tokens support message deletion and editing synchronization!"
             )
         
         keyboard = [
@@ -1622,7 +1721,7 @@ async def forward_to_discord(event, user_id: int) -> None:
                 for channel_info in channels:
                     discord_message_id = await send_to_discord_channel(event, channel_info, user_id)
                     
-                    # Track the Discord message ID for deletion synchronization (only if using bot token)
+                    # Track the Discord message ID for deletion/editing synchronization (only if using bot token)
                     if discord_message_id and not channel_info.get("webhook_only"):
                         update_discord_message_mapping(
                             str(user_id), 
@@ -3474,7 +3573,7 @@ async def handler(event) -> None:
                         log_activity(f"Message blocked by blacklist from {chat_display} for user {user_id_str}")
                         continue
 
-                    # Forward to Discord (this now tracks message IDs for deletion sync)
+                    # Forward to Discord (this now tracks message IDs for deletion/editing sync)
                     await forward_to_discord(event, user_id)
 
             except Exception as user_error:
@@ -3537,11 +3636,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "🤖 <b>Telegram Auto-Forward Bot</b>\n\n"
         "I can automatically forward messages between Telegram channels and groups with advanced features:\n\n"
         "🔹 <b>Instant Message Deletion Sync</b> - When a message is deleted in source, it's instantly deleted in destinations\n"
+        "🔹 <b>Message Editing Sync</b> - When a message is edited in source, it's instantly edited in destinations\n"
         "🔹 <b>No Forward Attribution</b> - Messages appear as if sent directly by the bot\n"
         "🔹 <b>Smart Media Filtering</b> - Control which media types get forwarded\n"
         "🔹 <b>Keyword Filtering</b> - Forward only messages containing specific keywords\n"
         "🔹 <b>Discord Integration</b> - Forward messages to Discord channels\n"
-        "🔹 <b>Discord Deletion Sync</b> - Delete Discord messages when Telegram messages are deleted\n"
+        "🔹 <b>Discord Deletion & Editing Sync</b> - Delete/edit Discord messages when Telegram messages are deleted/edited\n"
         "🔹 <b>Multiple Routes</b> - Forward from one source to multiple destinations\n\n"
         "💡 <b>Quick Start:</b>\n"
         "1. 📋 Select Channels - Choose source channels\n"
@@ -4174,7 +4274,7 @@ async def complete_route_creation(update: Update, user_id: int) -> None:
                 f"💡 <b>What happens now:</b>\n"
                 f"• Messages from source will be forwarded to destination\n"
                 f"• No 'forwarded from' attribution\n"
-                f"• Instant deletion sync is enabled\n"
+                f"• Instant deletion and editing sync enabled\n"
                 f"• Use 🚀 Start All to begin forwarding\n\n"
                 f"🔧 <b>Note:</b> Make sure the bot has permission to send messages in the destination channel!"
             )
@@ -4232,7 +4332,7 @@ async def handle_add_route_menu(update: Update) -> None:
             "2. Select a destination channel (where messages go to)\n"
             "3. The bot will forward messages between them\n"
             "4. No 'forwarded from' attribution\n"
-            "5. Instant deletion sync enabled\n\n"
+            "5. Instant deletion and editing sync enabled\n\n"
             "Choose how you want to add the route:"
         )
         
@@ -4435,7 +4535,7 @@ async def complete_manual_route_creation(update: Update, user_id: int) -> None:
                 f"💡 <b>What happens now:</b>\n"
                 f"• Messages from source will be forwarded to destination\n"
                 f"• No 'forwarded from' attribution\n"
-                f"• Instant deletion sync enabled\n"
+                f"• Instant deletion and editing sync enabled\n"
                 f"• Use 🚀 Start All to begin forwarding\n\n"
                 f"🔧 <b>Note:</b> Make sure the bot has permission to send messages in the destination channel!"
             )
@@ -5128,22 +5228,6 @@ async def handle_quick_add_input(update: Update, context: ContextTypes.DEFAULT_T
                 "allowed_media_types": list(SUPPORTED_MEDIA_TYPES.keys()) + ["text"]
             }
         
-        # Add channels to available channels
-        source_info = {
-            "id": source_entity.id,
-            "title": getattr(source_entity, 'title', 'Unknown'),
-            "username": getattr(source_entity, 'username', None)
-        }
-        target_info = {
-            "id": target_entity.id,
-            "title": getattr(target_entity, 'title', 'Unknown'),
-            "username": getattr(target_entity, 'username', None)
-        }
-        
-        user_settings[user_id_str]["available_channels"][source_key] = source_info
-        user_settings[user_id_str]["available_channels"][target_key] = target_info
-        
-        # Add route
         routes = user_settings[user_id_str].get("routes", {})
         
         if source_key not in routes:
@@ -5154,19 +5238,36 @@ async def handle_quick_add_input(update: Update, context: ContextTypes.DEFAULT_T
             user_settings[user_id_str]["routes"] = routes
             save_settings()
             
+            # Also add to available channels if not already there
+            if source_key not in user_settings[user_id_str]["available_channels"]:
+                user_settings[user_id_str]["available_channels"][source_key] = {
+                    "id": source_entity.id,
+                    "title": getattr(source_entity, 'title', 'Unknown'),
+                    "username": getattr(source_entity, 'username', None)
+                }
+            
+            if target_key not in user_settings[user_id_str]["available_channels"]:
+                user_settings[user_id_str]["available_channels"][target_key] = {
+                    "id": target_entity.id,
+                    "title": getattr(target_entity, 'title', 'Unknown'),
+                    "username": getattr(target_entity, 'username', None)
+                }
+            
+            save_settings()
+            
             source_display = f"@{source_entity.username}" if source_entity.username else f"ID: {source_entity.id}"
             target_display = f"@{target_entity.username}" if target_entity.username else f"ID: {target_entity.id}"
             
             text = (
-                f"✅ <b>Quick Route Added Successfully!</b>\n\n"
+                f"✅ <b>Route Added Successfully!</b>\n\n"
                 f"🔄 <b>New Route:</b>\n"
                 f"📢 Source: {source_display}\n"
                 f"🎯 Destination: {target_display}\n\n"
-                f"💡 <b>What happened:</b>\n"
-                f"• Both channels added to your available channels\n"
-                f"• Route created for automatic forwarding\n"
+                f"💡 <b>What happens now:</b>\n"
+                f"• Messages from source will be forwarded to destination\n"
                 f"• No 'forwarded from' attribution\n"
-                f"• Instant deletion sync enabled\n"
+                f"• Instant deletion and editing sync enabled\n"
+                f"• Both channels added to your available channels\n"
                 f"• Use 🚀 Start All to begin forwarding\n\n"
                 f"🔧 <b>Note:</b> Make sure the bot has permission to send messages in the destination channel!"
             )
@@ -5175,7 +5276,9 @@ async def handle_quick_add_input(update: Update, context: ContextTypes.DEFAULT_T
         else:
             text = f"⚠️ Route already exists."
         
-        del route_creation_states[user_id]
+        if user_id in route_creation_states:
+            del route_creation_states[user_id]
+        
         await safe_reply(update, text, get_navigation_keyboard())
         
     except Exception as e:
@@ -5183,550 +5286,138 @@ async def handle_quick_add_input(update: Update, context: ContextTypes.DEFAULT_T
         log_error(f"Error processing quick add input '{user_input}' for user {user_id}", e)
         
         if "Could not resolve" in error_msg or "No user has" in error_msg:
-            channel_in_error = source_input if "Could not resolve" in error_msg and source_input in error_msg else target_input
             await safe_reply(update,
                 f"❌ <b>Channel Not Found</b>\n\n"
-                f"I couldn't find the channel <code>{channel_in_error}</code>.\n\n"
+                f"I couldn't find one of the channels in <code>{user_input}</code>.\n\n"
                 "💡 <b>Possible reasons:</b>\n"
-                "• The channel doesn't exist\n"
+                "• One of the channels doesn't exist\n"
                 "• You entered an invalid username/ID\n"
-                "• The channel is extremely private\n"
-                "• There's a typo in the username\n\n"
+                "• One of the channels is extremely private\n"
+                "• There's a typo in one of the usernames\n\n"
                 "Please check and try again:",
                 get_quick_add_keyboard()
             )
         else:
             await safe_reply(update,
                 f"❌ <b>Error Processing Channels</b>\n\n"
-                f"An error occurred while processing your input.\n\n"
+                f"An error occurred while processing <code>{user_input}</code>.\n\n"
                 f"Error: {error_msg}\n\n"
                 "Please try again with different channels:",
                 get_quick_add_keyboard()
             )
 
-async def handle_start_forwarding(update: Update) -> None:
-    """Start forwarding for all routes"""
-    user_id = update.callback_query.from_user.id
-    
-    user_id_str = str(user_id)
-    refresh_user_settings()
-    
-    if user_id_str in user_settings:
-        user_settings[user_id_str]["forwarding"] = True
-        save_settings()
-        
-        text = "✅ <b>Forwarding Started!</b>\n\nAll enabled routes are now active and forwarding messages."
-        log_activity(f"User {user_id} started all forwarding")
-    else:
-        text = "❌ No settings found. Please set up routes first."
-    
-    await safe_edit_message(update, text, get_navigation_keyboard())
-
-async def handle_stop_forwarding(update: Update) -> None:
-    """Stop forwarding for all routes"""
-    user_id = update.callback_query.from_user.id
-    
-    user_id_str = str(user_id)
-    refresh_user_settings()
-    
-    if user_id_str in user_settings:
-        user_settings[user_id_str]["forwarding"] = False
-        save_settings()
-        
-        text = "⏸️ <b>Forwarding Stopped!</b>\n\nAll forwarding has been paused. No new messages will be forwarded."
-        log_activity(f"User {user_id} stopped all forwarding")
-    else:
-        text = "❌ No settings found. Nothing to stop."
-    
-    await safe_edit_message(update, text, get_navigation_keyboard())
-
-async def handle_status(update: Update) -> None:
-    """Show current bot status"""
-    user_id = update.callback_query.from_user.id
-    
-    try:
-        user_settings = get_user_settings_fresh(user_id)
-        routes = user_settings.get("routes", {})
-        available_channels = user_settings.get("available_channels", {})
-        disabled_routes = user_settings.get("disabled_routes", {})
-        
-        total_routes = sum(len(targets) for targets in routes.values())
-        enabled_routes = total_routes - len(disabled_routes)
-        
-        text = (
-            "📊 <b>Bot Status</b>\n\n"
-            f"🔄 <b>Forwarding:</b> {'✅ ON' if user_settings.get('forwarding') else '❌ OFF'}\n"
-            f"📋 <b>Selected Channels:</b> {len(available_channels)}\n"
-            f"🔄 <b>Total Routes:</b> {total_routes}\n"
-            f"✅ <b>Enabled Routes:</b> {enabled_routes}\n"
-            f"⏸️ <b>Disabled Routes:</b> {len(disabled_routes)}\n\n"
-        )
-        
-        if user_settings.get('forwarding'):
-            text += "💡 <b>Bot is actively forwarding messages</b>\n"
-            if enabled_routes == 0:
-                text += "⚠️ <b>Warning:</b> No routes are enabled. Enable some routes to start forwarding.\n"
-        else:
-            text += "💡 <b>Bot is paused. Use 🚀 Start All to begin forwarding.</b>\n"
-        
-        text += "\n🔧 <b>Quick Actions:</b>\n"
-        text += "• Use 📋 Select Channels to add more channels\n"
-        text += "• Use ➕ Add Route to create new routes\n"
-        text += "• Use ⚙️ Manage Routes to enable/disable routes\n"
-        text += "• Check 🔒 Check Permissions for bot access issues"
-        
-        keyboard = [
-            [
-                InlineKeyboardButton("🚀 Start All", callback_data="menu_start_forward"),
-                InlineKeyboardButton("🛑 Stop All", callback_data="menu_stop_forward")
-            ],
-            [
-                InlineKeyboardButton("📋 Select Channels", callback_data="menu_select_channels"),
-                InlineKeyboardButton("➕ Add Route", callback_data="menu_add_route")
-            ],
-            [
-                InlineKeyboardButton("⚙️ Manage Routes", callback_data="menu_manage_routes"),
-                InlineKeyboardButton("🔒 Check Permissions", callback_data="menu_check_permissions")
-            ],
-            [
-                InlineKeyboardButton("🏠 Main Menu", callback_data="menu_main")
-            ]
-        ]
-        
-        await safe_edit_message(update, text, InlineKeyboardMarkup(keyboard))
-        
-    except Exception as e:
-        log_error(f"Error showing status for user {user_id}", e)
-        await safe_edit_message(update, "❌ An error occurred while loading status.", get_navigation_keyboard())
-
-async def handle_media_stats(update: Update) -> None:
-    """Show media forwarding statistics"""
-    user_id = update.callback_query.from_user.id
-    
-    try:
-        user_stats = media_forwarding_stats.get(str(user_id), {})
-        
-        if not user_stats:
-            text = (
-                "🖼️ <b>Media Forwarding Statistics</b>\n\n"
-                "No media forwarding statistics available yet.\n\n"
-                "💡 <b>Statistics will appear here after:</b>\n"
-                "• You start forwarding messages\n"
-                "• Media messages are processed\n"
-                "• Both successful and failed forwards are tracked\n\n"
-                "Start forwarding to see your media statistics!"
-            )
-        else:
-            total_success = 0
-            total_failed = 0
-            stats_lines = []
-            
-            for media_type, counts in user_stats.items():
-                success = counts.get("success", 0)
-                failed = counts.get("failed", 0)
-                total = success + failed
-                success_rate = (success / total * 100) if total > 0 else 0
-                
-                display_name = MEDIA_TYPE_DISPLAY_NAMES.get(media_type, media_type.capitalize())
-                stats_lines.append(f"• {display_name}: {success}✅ {failed}❌ ({success_rate:.1f}% success)")
-                
-                total_success += success
-                total_failed += failed
-            
-            total_all = total_success + total_failed
-            overall_rate = (total_success / total_all * 100) if total_all > 0 else 0
-            
-            text = (
-                f"🖼️ <b>Media Forwarding Statistics</b>\n\n"
-                f"📊 <b>Overview:</b>\n"
-                f"• Total Forwards: {total_all}\n"
-                f"• Successful: {total_success} ✅\n"
-                f"• Failed: {total_failed} ❌\n"
-                f"• Success Rate: {overall_rate:.1f}%\n\n"
-                f"📈 <b>Breakdown by Media Type:</b>\n"
-                + "\n".join(stats_lines) +
-                f"\n\n💡 <b>Tips for better success rates:</b>\n"
-                f"• Ensure bot has proper permissions in destination channels\n"
-                f"• Check media type filters in 🖼️ Media Filters\n"
-                f"• Monitor for permission errors\n"
-                f"• Target >90% success rate for optimal performance"
-            )
-        
-        keyboard = [
-            [InlineKeyboardButton("🔄 Refresh Stats", callback_data="menu_media_stats")],
-            [InlineKeyboardButton("🖼️ Media Filters", callback_data="menu_media_filters")],
-            [InlineKeyboardButton("🔒 Check Permissions", callback_data="menu_check_permissions")],
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="menu_main")]
-        ]
-        
-        await safe_edit_message(update, text, InlineKeyboardMarkup(keyboard))
-        
-    except Exception as e:
-        log_error(f"Error showing media stats for user {user_id}", e)
-        await safe_edit_message(update, "❌ An error occurred while loading media statistics.", get_navigation_keyboard())
-
-async def handle_help(update: Update) -> None:
-    """Show help information"""
-    text = (
-        "❓ <b>Telegram Auto-Forward Bot Help</b>\n\n"
-        
-        "🔹 <b>Core Features:</b>\n"
-        "• <b>Automatic Forwarding</b> - Forward messages between channels\n"
-        "• <b>No Attribution</b> - Messages appear as sent by bot\n"
-        "• <b>Instant Deletion Sync</b> - Delete in source = delete in destinations\n"
-        "• <b>Media Filtering</b> - Choose which media types to forward\n"
-        "• <b>Keyword Filtering</b> - Forward only messages with specific keywords\n"
-        "• <b>Discord Integration</b> - Forward to Discord channels\n"
-        "• <b>Discord Deletion Sync</b> - Delete Discord messages when Telegram messages are deleted\n\n"
-        
-        "🔹 <b>Quick Start Guide:</b>\n"
-        "1. <b>📋 Select Channels</b> - Choose source channels to monitor\n"
-        "2. <b>⚙️ Manage Channels</b> - Review your selected channels\n"
-        "3. <b>🔤 Keyword Filters</b> - Set up keyword filtering (optional)\n"
-        "4. <b>🖼️ Media Filters</b> - Choose media types to forward\n"
-        "5. <b>➕ Add Route</b> - Create forwarding routes\n"
-        "6. <b>🚀 Start All</b> - Begin automatic forwarding\n\n"
-        
-        "🔹 <b>Route Management:</b>\n"
-        "• <b>Enabled Routes</b> (✅) - Actively forwarding messages\n"
-        "• <b>Disabled Routes</b> (⏸️) - Paused, not forwarding\n"
-        "• Toggle routes in ⚙️ Manage Routes\n"
-        "• Delete unwanted routes when needed\n\n"
-        
-        "🔹 <b>Filtering Options:</b>\n"
-        "• <b>Keyword Filtering</b> - Control which messages get forwarded\n"
-        "• <b>Media Filtering</b> - Choose specific media types to allow\n"
-        "• <b>Stickers</b> - Always forwarded (ignore keyword filters)\n\n"
-        
-        "🔹 <b>Discord Integration:</b>\n"
-        "• Forward messages from Telegram to Discord\n"
-        "• Set up Discord bot token or webhook\n"
-        "• Manage Discord routes separately\n"
-        "• Supports text and image messages\n"
-        "• <b>Deletion Sync:</b> Requires Discord bot token (not webhook)\n\n"
-        
-        "🔹 <b>Troubleshooting:</b>\n"
-        "• <b>Messages not forwarding?</b> Check routes are enabled\n"
-        "• <b>Permission errors?</b> Use 🔒 Check Permissions\n"
-        "• <b>Deletions not syncing?</b> Bot needs delete permissions\n"
-        "• <b>Discord deletions not working?</b> Use bot token, not webhook\n"
-        "• <b>Need more help?</b> Check the detailed guides\n\n"
-        
-        "💡 <b>Pro Tip:</b> Start with a few test routes to verify everything works before scaling up!"
-    )
-    
-    keyboard = [
-        [InlineKeyboardButton("📋 Select Channels", callback_data="menu_select_channels")],
-        [InlineKeyboardButton("➕ Add Route", callback_data="menu_add_route")],
-        [InlineKeyboardButton("🚀 Start All", callback_data="menu_start_forward")],
-        [InlineKeyboardButton("🔒 Check Permissions", callback_data="menu_check_permissions")],
-        [InlineKeyboardButton("🏠 Main Menu", callback_data="menu_main")]
-    ]
-    
-    await safe_edit_message(update, text, InlineKeyboardMarkup(keyboard))
-
-# ========= CALLBACK QUERY HANDLER =========
-async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle all callback queries with enhanced route management"""
-    query = update.callback_query
-    await query.answer()
-    
-    data = query.data
-    
-    try:
-        if data == "menu_main":
-            await handle_main_menu(update)
-        
-        # Channel Management
-        elif data == "menu_select_channels":
-            await handle_channel_selection_menu(update)
-        elif data == "browse_channels":
-            await handle_browse_channels(update)
-        elif data == "menu_manage_channels":
-            await handle_manage_channels_menu(update)
-        elif data == "manual_input_channels":
-            await handle_manual_channel_input(update, "channels")
-        
-        # Route Management
-        elif data == "menu_add_route":
-            await handle_add_route_menu(update)
-        elif data == "menu_list_routes":
-            await handle_list_routes(update)
-        elif data == "menu_manage_routes":
-            await handle_manage_routes_menu(update)
-        elif data == "menu_quick_add":
-            await handle_quick_add_menu(update)
-        elif data == "select_route_channels":
-            await handle_select_route_channels(update)
-        elif data == "manual_route_input":
-            await handle_manual_channel_input(update, "source")
-        elif data == "manual_input_source":
-            await handle_manual_channel_input(update, "source")
-        elif data == "manual_input_target":
-            await handle_manual_channel_input(update, "target")
-        
-        # Channel Selection Pagination
-        elif data.startswith("channel_sel_page_"):
-            page = int(data.split("_")[-1])
-            await handle_channel_selection_pagination(update, page)
-        elif data.startswith("toggle_channel_"):
-            parts = data.split("_")
-            channel_id = parts[2]
-            page = int(parts[3])
-            await handle_channel_toggle(update, channel_id, page)
-        elif data == "save_channel_selection":
-            await handle_save_channel_selection(update)
-        elif data == "select_all_channels":
-            await handle_select_all_channels(update)
-        elif data == "clear_all_channels":
-            await handle_clear_all_channels(update)
-        
-        # Channel Management Pagination
-        elif data.startswith("channel_mgmt_page_"):
-            page = int(data.split("_")[-1])
-            await handle_channel_management_pagination(update, page)
-        elif data.startswith("remove_channel_"):
-            parts = data.split("_")
-            channel_key = parts[2]
-            page = int(parts[3])
-            await handle_channel_removal(update, channel_key, page)
-        elif data == "remove_all_channels":
-            await handle_remove_all_channels(update)
-        
-        # Route Selection
-        elif data.startswith("route_select_"):
-            parts = data.split("_")
-            step = parts[2]
-            channel_key = parts[3]
-            page = int(parts[4])
-            await handle_route_channel_selection(update, step, channel_key, page)
-        elif data.startswith("route_"):
-            if data.startswith("route_source_page_") or data.startswith("route_target_page_"):
-                parts = data.split("_")
-                step = parts[1]
-                page = int(parts[3])
-                await handle_route_selection_pagination(update, step, page)
-        
-        # Route Management
-        elif data.startswith("toggle_route_"):
-            parts = data.split("_")
-            route_key = parts[2]
-            page = int(parts[3])
-            await handle_route_toggle(update, route_key, page)
-        elif data.startswith("routes_page_"):
-            page = int(data.split("_")[-1])
-            await handle_route_management_pagination(update, page)
-        elif data == "enable_all_routes":
-            await handle_enable_all_routes(update)
-        elif data == "disable_all_routes":
-            await handle_disable_all_routes(update)
-        elif data == "delete_routes_mode":
-            await handle_delete_routes_mode(update)
-        
-        # Route Deletion
-        elif data.startswith("toggle_delete_"):
-            parts = data.split("_")
-            route_key = parts[2]
-            page = int(parts[3])
-            await handle_route_deletion_toggle(update, route_key, page)
-        elif data.startswith("delete_page_"):
-            page = int(data.split("_")[-1])
-            await handle_deletion_pagination(update, page)
-        elif data == "select_all_routes":
-            await handle_select_all_routes(update)
-        elif data == "clear_selection":
-            await handle_clear_selection(update)
-        elif data == "confirm_deletion":
-            await handle_confirm_deletion(update)
-        
-        # Forwarding Control
-        elif data == "menu_start_forward":
-            await handle_start_forwarding(update)
-        elif data == "menu_stop_forward":
-            await handle_stop_forwarding(update)
-        
-        # Status and Stats
-        elif data == "menu_status":
-            await handle_status(update)
-        elif data == "menu_media_stats":
-            await handle_media_stats(update)
-        elif data == "menu_deletion_stats":
-            await show_deletion_performance(update)
-        elif data == "menu_check_permissions":
-            await check_bot_permissions(update)
-        
-        # Keyword Filter Management
-        elif data == "menu_keyword_management":
-            await start_keyword_management(update)
-        elif data == "edit_required_keywords":
-            await handle_keyword_editing_mode(update, "required")
-        elif data == "edit_blocked_keywords":
-            await handle_keyword_editing_mode(update, "blocked")
-        elif data.startswith("remove_keyword_"):
-            parts = data.split("_")
-            keyword_type = parts[2]
-            index = int(parts[3])
-            await handle_keyword_removal(update, keyword_type, index)
-        elif data.startswith("add_keyword_"):
-            keyword_type = data.split("_")[2]
-            await handle_add_keyword_mode(update, keyword_type)
-        elif data.startswith("clear_keywords_"):
-            keyword_type = data.split("_")[2]
-            await handle_clear_keywords(update, keyword_type)
-        elif data == "reset_all_keywords":
-            await handle_reset_all_keywords(update)
-        elif data == "keyword_filtering_help":
-            await show_keyword_filtering_help(update)
-        elif data == "save_keyword_settings":
-            await save_keyword_settings(update)
-        
-        # Media Filter Management
-        elif data == "menu_media_filters":
-            await start_media_filter_management(update)
-        elif data.startswith("toggle_media_"):
-            media_type = data.split("_")[2]
-            await handle_media_type_toggle(update, media_type)
-        elif data in ["allow_all_media", "block_all_media"]:
-            await handle_bulk_media_actions(update, data)
-        elif data == "save_media_filters":
-            await save_media_filters(update)
-        
-        # Discord Route Management
-        elif data == "menu_discord_routes":
-            await start_discord_route_management(update)
-        elif data == "add_discord_route":
-            await start_add_discord_route(update)
-        elif data == "view_discord_routes":
-            await view_discord_routes(update)
-        elif data == "delete_discord_route":
-            await start_delete_discord_route(update)
-        elif data == "discord_settings":
-            await show_discord_settings(update)
-        elif data == "continue_webhook_discord":
-            await handle_continue_webhook_discord(update)
-        elif data.startswith("discord_select_source_"):
-            parts = data.split("_")
-            channel_key = parts[3]
-            page = int(parts[4])
-            await handle_discord_source_selection(update, channel_key, page)
-        elif data.startswith("discord_source_page_"):
-            page = int(data.split("_")[-1])
-            await handle_discord_source_pagination(update, page)
-        elif data == "discord_back_to_sources":
-            await handle_discord_back_to_sources(update)
-        elif data.startswith("discord_delete_"):
-            parts = data.split("_")
-            route_key = parts[2]
-            page = int(parts[3])
-            await handle_discord_route_deletion(update, route_key, page)
-        elif data.startswith("discord_del_page_"):
-            page = int(data.split("_")[-1])
-            await handle_discord_deletion_pagination(update, page)
-        
-        # Help
-        elif data == "menu_help":
-            await handle_help(update)
-        
-        else:
-            log_error(f"Unknown callback data: {data}")
-            await query.answer("Unknown command")
-    
-    except Exception as e:
-        log_error(f"Error handling callback query: {data}", e)
-        await query.answer("❌ An error occurred")
-
-# ========= MESSAGE HANDLER =========
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle all incoming messages"""
-    user_id = update.message.from_user.id
-    
-    # Check if user is in any state that requires text input
-    if (user_id in route_creation_states or 
-        user_id in discord_route_states or 
-        user_id in keyword_management_states):
-        
-        # Let the specific handlers process the message
-        if user_id in route_creation_states:
-            state = route_creation_states[user_id]
-            if state.get("step") == "quick_add":
-                await handle_quick_add_input(update, context)
-                return
-            else:
-                await handle_channel_input(update, context)
-                return
-        
-        if user_id in discord_route_states:
-            state = discord_route_states[user_id]
-            if state.get("step") == "entering_discord_channel":
-                await handle_discord_channel_input(update, context)
-                return
-        
-        if user_id in keyword_management_states:
-            await handle_keyword_input(update, context)
-            return
-    
-    # If no specific state, show main menu
-    await start(update, context)
-
-# ========= BOT SETUP =========
-def setup_bot():
-    """Setup the bot with all handlers"""
+# ========= BOT SETUP AND STARTUP =========
+def main() -> None:
+    """Start the bot."""
+    # Create the Application and pass it your bot's token.
     application = Application.builder().token(BOT_TOKEN).build()
-    
-    # Command handlers
-    application.add_handler(CommandHandler("start", start))
-    
-    # Callback query handler
-    application.add_handler(CallbackQueryHandler(handle_callback_query))
-    
-    # Message handler (must be last)
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    return application
 
-async def main():
-    """Main function to start both Telegram client and bot"""
-    try:
-        # Initialize message mapping systems
-        setup_message_mappings_file()
-        setup_discord_message_mappings_file()
-        
-        # Start the Telegram client
-        await client.start()
-        log_activity("Telegram client started successfully")
-        
-        # Clean up orphaned mappings on startup
-        
-        # Load message mappings for deletion sync
-        message_mappings = load_message_mappings()
-        discord_message_mappings = load_discord_message_mappings()
-        
-        log_activity(f"Loaded {sum(len(user_data) for user_data in message_mappings.values())} Telegram message mappings")
-        log_activity(f"Loaded {sum(len(user_data) for user_data in discord_message_mappings.values())} Discord message mappings")
-        
-        # Setup and start the bot
-        application = setup_bot()
-        
-        log_activity("Bot application setup completed")
-        
-        # Start polling
-        await application.initialize()
-        await application.start()
-        await application.updater.start_polling()
-        
-        log_activity("Bot started polling successfully")
-        
-        # Keep the script running
-        await asyncio.Event().wait()
-        
-    except Exception as e:
-        log_error("Critical error in main function", e)
-    finally:
-        # Cleanup
-        if 'application' in locals():
-            await application.stop()
-        await client.disconnect()
-        log_activity("Bot shutdown completed")
+    # Setup message mapping files
+    setup_message_mappings_file()
+    setup_discord_message_mappings_file()
+
+    # Add command handlers
+    application.add_handler(CommandHandler("start", start))
+
+    # Add callback query handlers
+    application.add_handler(CallbackQueryHandler(handle_main_menu, pattern="^menu_main$"))
+    application.add_handler(CallbackQueryHandler(handle_channel_selection_menu, pattern="^menu_select_channels$"))
+    application.add_handler(CallbackQueryHandler(handle_manage_channels_menu, pattern="^menu_manage_channels$"))
+    application.add_handler(CallbackQueryHandler(handle_browse_channels, pattern="^browse_channels$"))
+    application.add_handler(CallbackQueryHandler(handle_save_channel_selection, pattern="^save_channel_selection$"))
+    application.add_handler(CallbackQueryHandler(handle_select_all_channels, pattern="^select_all_channels$"))
+    application.add_handler(CallbackQueryHandler(handle_clear_all_channels, pattern="^clear_all_channels$"))
+    application.add_handler(CallbackQueryHandler(handle_remove_all_channels, pattern="^remove_all_channels$"))
+    
+    # Channel selection pagination
+    application.add_handler(CallbackQueryHandler(handle_channel_selection_pagination, pattern="^channel_sel_page_"))
+    application.add_handler(CallbackQueryHandler(handle_channel_toggle, pattern="^toggle_channel_"))
+    
+    # Channel management pagination
+    application.add_handler(CallbackQueryHandler(handle_channel_management_pagination, pattern="^channel_mgmt_page_"))
+    application.add_handler(CallbackQueryHandler(handle_channel_removal, pattern="^remove_channel_"))
+    
+    # Manual channel input
+    application.add_handler(CallbackQueryHandler(handle_manual_channel_input, pattern="^manual_input_"))
+    
+    # Route management
+    application.add_handler(CallbackQueryHandler(handle_add_route_menu, pattern="^menu_add_route$"))
+    application.add_handler(CallbackQueryHandler(handle_list_routes, pattern="^menu_list_routes$"))
+    application.add_handler(CallbackQueryHandler(handle_manage_routes_menu, pattern="^menu_manage_routes$"))
+    application.add_handler(CallbackQueryHandler(handle_quick_add_menu, pattern="^menu_quick_add$"))
+    
+    # Route selection
+    application.add_handler(CallbackQueryHandler(handle_select_route_channels, pattern="^select_route_channels$"))
+    application.add_handler(CallbackQueryHandler(handle_route_channel_selection, pattern="^route_select_"))
+    application.add_handler(CallbackQueryHandler(handle_route_selection_pagination, pattern="^route_(source|target)_page_"))
+    
+    # Route management actions
+    application.add_handler(CallbackQueryHandler(handle_route_toggle, pattern="^toggle_route_"))
+    application.add_handler(CallbackQueryHandler(handle_route_management_pagination, pattern="^routes_page_"))
+    application.add_handler(CallbackQueryHandler(handle_enable_all_routes, pattern="^enable_all_routes$"))
+    application.add_handler(CallbackQueryHandler(handle_disable_all_routes, pattern="^disable_all_routes$"))
+    
+    # Route deletion
+    application.add_handler(CallbackQueryHandler(handle_delete_routes_mode, pattern="^delete_routes_mode$"))
+    application.add_handler(CallbackQueryHandler(handle_route_deletion_toggle, pattern="^toggle_delete_"))
+    application.add_handler(CallbackQueryHandler(handle_deletion_pagination, pattern="^delete_page_"))
+    application.add_handler(CallbackQueryHandler(handle_select_all_routes, pattern="^select_all_routes$"))
+    application.add_handler(CallbackQueryHandler(handle_clear_selection, pattern="^clear_selection$"))
+    application.add_handler(CallbackQueryHandler(handle_confirm_deletion, pattern="^confirm_deletion$"))
+    
+    # Keyword filtering
+    application.add_handler(CallbackQueryHandler(start_keyword_management, pattern="^menu_keyword_management$"))
+    application.add_handler(CallbackQueryHandler(handle_keyword_editing_mode, pattern="^edit_(required|blocked)_keywords$"))
+    application.add_handler(CallbackQueryHandler(handle_keyword_removal, pattern="^remove_keyword_"))
+    application.add_handler(CallbackQueryHandler(handle_clear_keywords, pattern="^clear_keywords_"))
+    application.add_handler(CallbackQueryHandler(handle_add_keyword_mode, pattern="^add_keyword_"))
+    application.add_handler(CallbackQueryHandler(save_keyword_settings, pattern="^save_keyword_settings$"))
+    application.add_handler(CallbackQueryHandler(handle_reset_all_keywords, pattern="^reset_all_keywords$"))
+    application.add_handler(CallbackQueryHandler(show_keyword_filtering_help, pattern="^keyword_filtering_help$"))
+    
+    # Media filtering
+    application.add_handler(CallbackQueryHandler(start_media_filter_management, pattern="^menu_media_filters$"))
+    application.add_handler(CallbackQueryHandler(handle_media_type_toggle, pattern="^toggle_media_"))
+    application.add_handler(CallbackQueryHandler(handle_bulk_media_actions, pattern="^(allow_all_media|block_all_media)$"))
+    application.add_handler(CallbackQueryHandler(save_media_filters, pattern="^save_media_filters$"))
+    
+    # Discord routes
+    application.add_handler(CallbackQueryHandler(start_discord_route_management, pattern="^menu_discord_routes$"))
+    application.add_handler(CallbackQueryHandler(start_add_discord_route, pattern="^add_discord_route$"))
+    application.add_handler(CallbackQueryHandler(handle_continue_webhook_discord, pattern="^continue_webhook_discord$"))
+    application.add_handler(CallbackQueryHandler(view_discord_routes, pattern="^view_discord_routes$"))
+    application.add_handler(CallbackQueryHandler(start_delete_discord_route, pattern="^delete_discord_route$"))
+    application.add_handler(CallbackQueryHandler(show_discord_settings, pattern="^discord_settings$"))
+    
+    # Discord route selection and pagination
+    application.add_handler(CallbackQueryHandler(handle_discord_source_selection, pattern="^discord_select_source_"))
+    application.add_handler(CallbackQueryHandler(handle_discord_source_pagination, pattern="^discord_source_page_"))
+    application.add_handler(CallbackQueryHandler(handle_discord_back_to_sources, pattern="^discord_back_to_sources$"))
+    application.add_handler(CallbackQueryHandler(handle_discord_route_deletion, pattern="^discord_delete_"))
+    application.add_handler(CallbackQueryHandler(handle_discord_deletion_pagination, pattern="^discord_del_page_"))
+    
+    # Performance monitoring
+    application.add_handler(CallbackQueryHandler(show_deletion_performance, pattern="^menu_deletion_stats$"))
+    application.add_handler(CallbackQueryHandler(check_bot_permissions, pattern="^menu_check_permissions$"))
+
+    # Add message handlers for manual input
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_channel_input))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_discord_channel_input))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_keyword_input))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_quick_add_input))
+
+    # Start the Bot
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Initialize the Telegram client and start both bots
+    loop = asyncio.get_event_loop()
+    
+    # Start the Telegram client
+    client.start()
+    
+    # Start the Telegram bot
+    main()
+    
+    # Run the client until disconnected
+    client.run_until_disconnected()

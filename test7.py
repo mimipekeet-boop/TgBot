@@ -975,7 +975,7 @@ def save_user_discord_routes(user_id: int, user_routes: Dict) -> None:
     routes[str(user_id)] = user_routes
     save_discord_routes(routes)
 
-async def start_discord_route_management(update: Update) -> None:
+async def start_discord_route_management(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Start Discord route management interface"""
     user_id = update.callback_query.from_user.id
     
@@ -1013,7 +1013,7 @@ def get_discord_management_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-async def start_add_discord_route(update: Update) -> None:
+async def start_add_discord_route(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Start the process of adding a Discord route"""
     user_id = update.callback_query.from_user.id
     
@@ -1102,7 +1102,7 @@ async def start_add_discord_route(update: Update) -> None:
         log_error(f"Error starting Discord route addition for user {user_id}", e)
         await safe_edit_message(update, "❌ An error occurred while setting up Discord route.", get_navigation_keyboard())
 
-async def handle_continue_webhook_discord(update: Update) -> None:
+async def handle_continue_webhook_discord(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Continue with webhook-only Discord mode"""
     user_id = update.callback_query.from_user.id
     
@@ -1186,7 +1186,7 @@ def create_discord_source_selection_keyboard(available_channels: Dict, page: int
     
     return InlineKeyboardMarkup(keyboard)
 
-async def handle_discord_source_selection(update: Update, channel_key: str, page: int) -> None:
+async def handle_discord_source_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, channel_key: str, page: int) -> None:
     """Handle source channel selection for Discord route"""
     user_id = update.callback_query.from_user.id
     
@@ -1260,9 +1260,9 @@ async def handle_discord_channel_input(update: Update, context: ContextTypes.DEF
     state["discord_channel_id"] = channel_id_input
     state["discord_channel_name"] = f"Discord Channel {channel_id_input}"
         
-    await complete_discord_route_creation(update, user_id)
+    await complete_discord_route_creation(update, context, user_id)
 
-async def complete_discord_route_creation(update: Update, user_id: int) -> None:
+async def complete_discord_route_creation(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int) -> None:
     """Complete the Discord route creation"""
     try:
         state = discord_route_states[user_id]
@@ -1331,7 +1331,7 @@ async def complete_discord_route_creation(update: Update, user_id: int) -> None:
         if user_id in discord_route_states:
             del discord_route_states[user_id]
 
-async def view_discord_routes(update: Update) -> None:
+async def view_discord_routes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show all Discord routes for the user"""
     user_id = update.callback_query.from_user.id
     
@@ -1392,7 +1392,7 @@ async def view_discord_routes(update: Update) -> None:
         log_error(f"Error viewing Discord routes for user {user_id}", e)
         await safe_edit_message(update, "❌ An error occurred while loading Discord routes.", get_navigation_keyboard())
 
-async def start_delete_discord_route(update: Update) -> None:
+async def start_delete_discord_route(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Start the Discord route deletion process with improved state management"""
     user_id = update.callback_query.from_user.id
     
@@ -1485,7 +1485,7 @@ def create_discord_deletion_keyboard(user_routes: Dict, user_id: int, page: int 
     
     return InlineKeyboardMarkup(keyboard)
 
-async def handle_discord_route_deletion(update: Update, route_key: str, page: int) -> None:
+async def handle_discord_route_deletion(update: Update, context: ContextTypes.DEFAULT_TYPE, route_key: str, page: int) -> None:
     """Handle Discord route deletion with improved error handling"""
     user_id = update.callback_query.from_user.id
     
@@ -1560,7 +1560,7 @@ async def handle_discord_route_deletion(update: Update, route_key: str, page: in
         log_error(f"Error deleting Discord route for user {user_id}", e)
         await update.callback_query.answer("❌ Error deleting route")
 
-async def handle_discord_deletion_pagination(update: Update, page: int) -> None:
+async def handle_discord_deletion_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int) -> None:
     """Handle pagination in Discord route deletion with improved error handling"""
     user_id = update.callback_query.from_user.id
     
@@ -1588,7 +1588,7 @@ async def handle_discord_deletion_pagination(update: Update, page: int) -> None:
         log_error(f"Error handling Discord deletion pagination for user {user_id}", e)
         await update.callback_query.answer("❌ Error loading page")
 
-async def show_discord_settings(update: Update) -> None:
+async def show_discord_settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show Discord integration settings and status"""
     user_id = update.callback_query.from_user.id
     
@@ -1914,7 +1914,7 @@ async def send_photo_via_bot(channel_id: str, photo_data: bytes, caption: str, u
         return None
 
 # ========= DISCORD DELETION PAGINATION HANDLER =========
-async def handle_discord_source_pagination(update: Update, page: int) -> None:
+async def handle_discord_source_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int) -> None:
     """Handle pagination in Discord source channel selection"""
     user_id = update.callback_query.from_user.id
     
@@ -1939,7 +1939,7 @@ async def handle_discord_source_pagination(update: Update, page: int) -> None:
         log_error(f"Error handling Discord source pagination for user {user_id}", e)
         await update.callback_query.answer("❌ Error loading page")
 
-async def handle_discord_back_to_sources(update: Update) -> None:
+async def handle_discord_back_to_sources(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle going back to Discord source selection"""
     user_id = update.callback_query.from_user.id
     
@@ -2040,7 +2040,7 @@ def get_user_settings_fresh(user_id: int) -> Dict:
     })
 
 # ========= PERFORMANCE MONITORING FUNCTIONS =========
-async def show_deletion_performance(update: Update) -> None:
+async def show_deletion_performance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show deletion performance statistics"""
     user_id = update.callback_query.from_user.id
     
@@ -2082,7 +2082,7 @@ async def show_deletion_performance(update: Update) -> None:
         log_error(f"Error showing deletion performance for user {user_id}", e)
         await safe_edit_message(update, "❌ Error loading deletion performance.", get_navigation_keyboard())
 
-async def check_bot_permissions(update: Update) -> None:
+async def check_bot_permissions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Check bot permissions in all destination channels"""
     user_id = update.callback_query.from_user.id
     
@@ -2158,7 +2158,7 @@ async def check_bot_permissions(update: Update) -> None:
         await safe_edit_message(update, "❌ Error checking permissions.", get_navigation_keyboard())
 
 # ========= MEDIA TYPE FILTERING FUNCTIONS =========
-async def start_media_filter_management(update: Update) -> None:
+async def start_media_filter_management(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Start the media type filtering management interface"""
     user_id = update.callback_query.from_user.id
     
@@ -2213,7 +2213,7 @@ def get_media_filter_management_keyboard(allowed_media_types: List[str]):
     keyboard.extend(action_buttons)
     return InlineKeyboardMarkup(keyboard)
 
-async def handle_media_type_toggle(update: Update, media_type: str) -> None:
+async def handle_media_type_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE, media_type: str) -> None:
     """Toggle individual media type allowance"""
     user_id = update.callback_query.from_user.id
     
@@ -2253,7 +2253,7 @@ async def handle_media_type_toggle(update: Update, media_type: str) -> None:
     keyboard = get_media_filter_management_keyboard(allowed_media_types)
     await safe_edit_message(update, text, keyboard)
 
-async def handle_bulk_media_actions(update: Update, action: str) -> None:
+async def handle_bulk_media_actions(update: Update, context: ContextTypes.DEFAULT_TYPE, action: str) -> None:
     """Handle bulk media filter actions (allow all/block all)"""
     user_id = update.callback_query.from_user.id
     
@@ -2287,7 +2287,7 @@ async def handle_bulk_media_actions(update: Update, action: str) -> None:
     keyboard = get_media_filter_management_keyboard(state["allowed_media_types"])
     await safe_edit_message(update, text, keyboard)
 
-async def save_media_filters(update: Update) -> None:
+async def save_media_filters(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Save media filter settings to user settings"""
     user_id = update.callback_query.from_user.id
     
@@ -2367,7 +2367,7 @@ def check_keyword_filtering(text: str, required_keywords: List[str], blocked_key
     
     return True
 
-async def start_keyword_management(update: Update) -> None:
+async def start_keyword_management(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Start the keyword management interface"""
     user_id = update.callback_query.from_user.id
     
@@ -2442,12 +2442,22 @@ def get_keyword_editing_keyboard(keyword_type: str, keywords: List[str]):
     
     return InlineKeyboardMarkup(keyboard)
 
-async def handle_keyword_editing_mode(update: Update, keyword_type: str) -> None:
-    """Handle entering keyword editing mode"""
+async def handle_keyword_editing_mode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle entering keyword editing mode - FIXED VERSION"""
     user_id = update.callback_query.from_user.id
     
     if user_id not in keyword_management_states:
         await update.callback_query.answer("Session expired. Please start again.")
+        return
+    
+    # Determine keyword_type from callback data
+    data = update.callback_query.data
+    if data == "edit_required_keywords":
+        keyword_type = "required"
+    elif data == "edit_blocked_keywords":
+        keyword_type = "blocked"
+    else:
+        await update.callback_query.answer("Invalid keyword type")
         return
     
     state = keyword_management_states[user_id]
@@ -2468,7 +2478,7 @@ async def handle_keyword_editing_mode(update: Update, keyword_type: str) -> None
     keyboard = get_keyword_editing_keyboard(keyword_type, keywords)
     await safe_edit_message(update, text, keyboard)
 
-async def handle_keyword_removal(update: Update, keyword_type: str, index: int) -> None:
+async def handle_keyword_removal(update: Update, context: ContextTypes.DEFAULT_TYPE, keyword_type: str, index: int) -> None:
     """Remove a keyword from the list and save immediately"""
     user_id = update.callback_query.from_user.id
     
@@ -2502,7 +2512,7 @@ async def handle_keyword_removal(update: Update, keyword_type: str, index: int) 
     keyboard = get_keyword_editing_keyboard(keyword_type, keywords)
     await safe_edit_message(update, text, keyboard)
 
-async def handle_clear_keywords(update: Update, keyword_type: str) -> None:
+async def handle_clear_keywords(update: Update, context: ContextTypes.DEFAULT_TYPE, keyword_type: str) -> None:
     """Clear all keywords of a specific type and save immediately"""
     user_id = update.callback_query.from_user.id
     
@@ -2531,12 +2541,22 @@ async def handle_clear_keywords(update: Update, keyword_type: str) -> None:
     keyboard = get_keyword_editing_keyboard(keyword_type, [])
     await safe_edit_message(update, text, keyboard)
 
-async def handle_add_keyword_mode(update: Update, keyword_type: str) -> None:
-    """Enter add keyword mode"""
+async def handle_add_keyword_mode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Enter add keyword mode - FIXED VERSION"""
     user_id = update.callback_query.from_user.id
     
     if user_id not in keyword_management_states:
         await update.callback_query.answer("Session expired. Please start again.")
+        return
+    
+    # Determine keyword_type from callback data
+    data = update.callback_query.data
+    if data == "add_keyword_required":
+        keyword_type = "required"
+    elif data == "add_keyword_blocked":
+        keyword_type = "blocked"
+    else:
+        await update.callback_query.answer("Invalid keyword type")
         return
     
     state = keyword_management_states[user_id]
@@ -2632,7 +2652,7 @@ async def save_keyword_changes(user_id: int) -> None:
     
     log_activity(f"User {user_id} saved keyword changes: {len(state['required_keywords'])} required, {len(state['blocked_keywords'])} blocked")
 
-async def save_keyword_settings(update: Update) -> None:
+async def save_keyword_settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Save keyword settings to user settings - explicit save"""
     user_id = update.callback_query.from_user.id
     
@@ -2662,7 +2682,7 @@ async def save_keyword_settings(update: Update) -> None:
     await safe_edit_message(update, text, get_navigation_keyboard())
     log_activity(f"User {user_id} explicitly saved keyword settings: {required_count} required, {blocked_count} blocked")
 
-async def handle_reset_all_keywords(update: Update) -> None:
+async def handle_reset_all_keywords(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Reset all keyword settings and save immediately"""
     user_id = update.callback_query.from_user.id
     
@@ -2695,7 +2715,7 @@ async def handle_reset_all_keywords(update: Update) -> None:
     keyboard = get_keyword_management_keyboard()
     await safe_edit_message(update, text, keyboard)
 
-async def show_keyword_filtering_help(update: Update) -> None:
+async def show_keyword_filtering_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show detailed help about keyword filtering"""
     text = (
         "💡 <b>Keyword Filtering Help</b>\n\n"
@@ -3656,7 +3676,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await safe_reply(update, welcome_text, get_main_menu_keyboard())
     log_activity(f"User {user_id} started the bot")
 
-async def handle_main_menu(update: Update) -> None:
+async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle main menu navigation"""
     user_id = update.callback_query.from_user.id
     
@@ -3681,7 +3701,7 @@ async def handle_main_menu(update: Update) -> None:
         log_error(f"Error handling main menu for user {user_id}", e)
         await safe_edit_message(update, "❌ An error occurred while loading the main menu.", get_navigation_keyboard())
 
-async def handle_channel_selection_menu(update: Update) -> None:
+async def handle_channel_selection_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle channel selection menu"""
     user_id = update.callback_query.from_user.id
     
@@ -3716,7 +3736,7 @@ async def handle_channel_selection_menu(update: Update) -> None:
         log_error(f"Error handling channel selection menu for user {user_id}", e)
         await safe_edit_message(update, "❌ An error occurred while loading channel selection.", get_navigation_keyboard())
 
-async def handle_browse_channels(update: Update) -> None:
+async def handle_browse_channels(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Browse and select channels from user's channel list"""
     user_id = update.callback_query.from_user.id
     
@@ -3771,7 +3791,7 @@ async def handle_browse_channels(update: Update) -> None:
         log_error(f"Error browsing channels for user {user_id}", e)
         await safe_edit_message(update, "❌ An error occurred while fetching your channels.", get_navigation_keyboard())
 
-async def handle_channel_toggle(update: Update, channel_id: str, page: int) -> None:
+async def handle_channel_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE, channel_id: str, page: int) -> None:
     """Toggle channel selection"""
     user_id = update.callback_query.from_user.id
     
@@ -3812,7 +3832,7 @@ async def handle_channel_toggle(update: Update, channel_id: str, page: int) -> N
     keyboard = create_channel_selection_keyboard(user_channels, selected_channels, page)
     await safe_edit_message(update, text, keyboard)
 
-async def handle_channel_selection_pagination(update: Update, page: int) -> None:
+async def handle_channel_selection_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int) -> None:
     """Handle pagination in channel selection"""
     user_id = update.callback_query.from_user.id
     
@@ -3838,7 +3858,7 @@ async def handle_channel_selection_pagination(update: Update, page: int) -> None
     keyboard = create_channel_selection_keyboard(user_channels, selected_channels, page)
     await safe_edit_message(update, text, keyboard)
 
-async def handle_save_channel_selection(update: Update) -> None:
+async def handle_save_channel_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Save channel selection to user settings"""
     user_id = update.callback_query.from_user.id
     
@@ -3873,7 +3893,7 @@ async def handle_save_channel_selection(update: Update) -> None:
     await safe_edit_message(update, text, get_navigation_keyboard())
     log_activity(f"User {user_id} saved {len(selected_channels)} channels")
 
-async def handle_select_all_channels(update: Update) -> None:
+async def handle_select_all_channels(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Select all available channels"""
     user_id = update.callback_query.from_user.id
     
@@ -3901,7 +3921,7 @@ async def handle_select_all_channels(update: Update) -> None:
     keyboard = create_channel_selection_keyboard(user_channels, state["selected_channels"], state["page"])
     await safe_edit_message(update, text, keyboard)
 
-async def handle_clear_all_channels(update: Update) -> None:
+async def handle_clear_all_channels(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Clear all channel selections"""
     user_id = update.callback_query.from_user.id
     
@@ -3926,7 +3946,7 @@ async def handle_clear_all_channels(update: Update) -> None:
     keyboard = create_channel_selection_keyboard(user_channels, {}, state["page"])
     await safe_edit_message(update, text, keyboard)
 
-async def handle_manage_channels_menu(update: Update) -> None:
+async def handle_manage_channels_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle channel management menu"""
     user_id = update.callback_query.from_user.id
     
@@ -3975,7 +3995,7 @@ async def handle_manage_channels_menu(update: Update) -> None:
         log_error(f"Error handling channel management menu for user {user_id}", e)
         await safe_edit_message(update, "❌ An error occurred while loading channel management.", get_navigation_keyboard())
 
-async def handle_channel_management_pagination(update: Update, page: int) -> None:
+async def handle_channel_management_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int) -> None:
     """Handle pagination in channel management"""
     user_id = update.callback_query.from_user.id
     
@@ -3999,7 +4019,7 @@ async def handle_channel_management_pagination(update: Update, page: int) -> Non
     keyboard = create_channel_management_keyboard(available_channels, page)
     await safe_edit_message(update, text, keyboard)
 
-async def handle_channel_removal(update: Update, channel_key: str, page: int) -> None:
+async def handle_channel_removal(update: Update, context: ContextTypes.DEFAULT_TYPE, channel_key: str, page: int) -> None:
     """Remove a channel from user's available channels"""
     user_id = update.callback_query.from_user.id
     
@@ -4045,7 +4065,7 @@ async def handle_channel_removal(update: Update, channel_key: str, page: int) ->
     else:
         await update.callback_query.answer("❌ Channel not found")
 
-async def handle_remove_all_channels(update: Update) -> None:
+async def handle_remove_all_channels(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Remove all channels from user's available channels"""
     user_id = update.callback_query.from_user.id
     
@@ -4069,7 +4089,7 @@ async def handle_remove_all_channels(update: Update) -> None:
         await update.callback_query.answer("❌ No channels to remove")
         await safe_edit_message(update, "❌ No channels found to remove.", get_navigation_keyboard())
 
-async def handle_manual_channel_input(update: Update, step: str) -> None:
+async def handle_manual_channel_input(update: Update, context: ContextTypes.DEFAULT_TYPE, step: str) -> None:
     """Handle manual channel input for various steps"""
     user_id = update.callback_query.from_user.id
     
@@ -4190,7 +4210,7 @@ async def handle_channel_input(update: Update, context: ContextTypes.DEFAULT_TYP
                 )
             else:
                 # Both source and target are set, complete the route
-                await complete_route_creation(update, user_id)
+                await complete_route_creation(update, context, user_id)
                 
     except Exception as e:
         error_msg = str(e)
@@ -4217,7 +4237,7 @@ async def handle_channel_input(update: Update, context: ContextTypes.DEFAULT_TYP
                 get_channel_selection_keyboard(step, user_id)
             )
 
-async def complete_route_creation(update: Update, user_id: int) -> None:
+async def complete_route_creation(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int) -> None:
     """Complete the route creation process"""
     try:
         state = route_creation_states[user_id]
@@ -4294,7 +4314,7 @@ async def complete_route_creation(update: Update, user_id: int) -> None:
         if user_id in route_creation_states:
             del route_creation_states[user_id]
 
-async def handle_add_route_menu(update: Update) -> None:
+async def handle_add_route_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle add route menu"""
     user_id = update.callback_query.from_user.id
     
@@ -4350,7 +4370,7 @@ async def handle_add_route_menu(update: Update) -> None:
         log_error(f"Error handling add route menu for user {user_id}", e)
         await safe_edit_message(update, "❌ An error occurred while loading route creation.", get_navigation_keyboard())
 
-async def handle_select_route_channels(update: Update) -> None:
+async def handle_select_route_channels(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle route creation using available channels"""
     user_id = update.callback_query.from_user.id
     
@@ -4426,7 +4446,7 @@ def create_route_selection_keyboard(available_channels: Dict, step: str, page: i
     
     return InlineKeyboardMarkup(keyboard)
 
-async def handle_route_channel_selection(update: Update, step: str, channel_key: str, page: int) -> None:
+async def handle_route_channel_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, step: str, channel_key: str, page: int) -> None:
     """Handle channel selection for route creation"""
     user_id = update.callback_query.from_user.id
     
@@ -4459,11 +4479,11 @@ async def handle_route_channel_selection(update: Update, step: str, channel_key:
         
     else:
         # Both source and target selected, complete the route
-        await complete_manual_route_creation(update, user_id)
+        await complete_manual_route_creation(update, context, user_id)
     
     await update.callback_query.answer(f"Selected: {channel_info['title']}")
 
-async def handle_route_selection_pagination(update: Update, step: str, page: int) -> None:
+async def handle_route_selection_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE, step: str, page: int) -> None:
     """Handle pagination in route channel selection"""
     user_id = update.callback_query.from_user.id
     
@@ -4485,7 +4505,7 @@ async def handle_route_selection_pagination(update: Update, step: str, page: int
     keyboard = create_route_selection_keyboard(available_channels, step, page)
     await safe_edit_message(update, text, keyboard)
 
-async def complete_manual_route_creation(update: Update, user_id: int) -> None:
+async def complete_manual_route_creation(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int) -> None:
     """Complete manual route creation"""
     try:
         state = manual_route_states[user_id]
@@ -4555,7 +4575,7 @@ async def complete_manual_route_creation(update: Update, user_id: int) -> None:
         if user_id in manual_route_states:
             del manual_route_states[user_id]
 
-async def handle_list_routes(update: Update) -> None:
+async def handle_list_routes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """List all routes for the user"""
     user_id = update.callback_query.from_user.id
     
@@ -4625,7 +4645,7 @@ async def handle_list_routes(update: Update) -> None:
         log_error(f"Error listing routes for user {user_id}", e)
         await safe_edit_message(update, "❌ An error occurred while loading routes.", get_navigation_keyboard())
 
-async def handle_manage_routes_menu(update: Update) -> None:
+async def handle_manage_routes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle route management menu"""
     user_id = update.callback_query.from_user.id
     
@@ -4703,7 +4723,7 @@ def _prepare_routes_data(user_settings: Dict) -> Dict:
     
     return routes_data
 
-async def handle_route_toggle(update: Update, route_key: str, page: int) -> None:
+async def handle_route_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE, route_key: str, page: int) -> None:
     """Toggle route enabled/disabled state"""
     user_id = update.callback_query.from_user.id
     
@@ -4767,7 +4787,7 @@ async def handle_route_toggle(update: Update, route_key: str, page: int) -> None
     keyboard = get_route_management_keyboard(routes_data, page)
     await safe_edit_message(update, text, keyboard)
 
-async def handle_route_management_pagination(update: Update, page: int) -> None:
+async def handle_route_management_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int) -> None:
     """Handle pagination in route management"""
     user_id = update.callback_query.from_user.id
     
@@ -4796,7 +4816,7 @@ async def handle_route_management_pagination(update: Update, page: int) -> None:
     keyboard = get_route_management_keyboard(routes_data, page)
     await safe_edit_message(update, text, keyboard)
 
-async def handle_enable_all_routes(update: Update) -> None:
+async def handle_enable_all_routes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Enable all routes"""
     user_id = update.callback_query.from_user.id
     
@@ -4837,7 +4857,7 @@ async def handle_enable_all_routes(update: Update) -> None:
     else:
         await update.callback_query.answer("❌ No routes found")
 
-async def handle_disable_all_routes(update: Update) -> None:
+async def handle_disable_all_routes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Disable all routes"""
     user_id = update.callback_query.from_user.id
     
@@ -4886,7 +4906,7 @@ async def handle_disable_all_routes(update: Update) -> None:
     else:
         await update.callback_query.answer("❌ No routes found")
 
-async def handle_delete_routes_mode(update: Update) -> None:
+async def handle_delete_routes_mode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Enter route deletion mode"""
     user_id = update.callback_query.from_user.id
     
@@ -4916,7 +4936,7 @@ async def handle_delete_routes_mode(update: Update) -> None:
     keyboard = get_route_deletion_keyboard(routes_data, set(), 0)
     await safe_edit_message(update, text, keyboard)
 
-async def handle_route_deletion_toggle(update: Update, route_key: str, page: int) -> None:
+async def handle_route_deletion_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE, route_key: str, page: int) -> None:
     """Toggle route selection for deletion"""
     user_id = update.callback_query.from_user.id
     
@@ -4960,7 +4980,7 @@ async def handle_route_deletion_toggle(update: Update, route_key: str, page: int
     keyboard = get_route_deletion_keyboard(routes_data, selected_routes, page)
     await safe_edit_message(update, text, keyboard)
 
-async def handle_deletion_pagination(update: Update, page: int) -> None:
+async def handle_deletion_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int) -> None:
     """Handle pagination in route deletion"""
     user_id = update.callback_query.from_user.id
     
@@ -4994,7 +5014,7 @@ async def handle_deletion_pagination(update: Update, page: int) -> None:
     keyboard = get_route_deletion_keyboard(routes_data, selected_routes, page)
     await safe_edit_message(update, text, keyboard)
 
-async def handle_select_all_routes(update: Update) -> None:
+async def handle_select_all_routes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Select all routes for deletion"""
     user_id = update.callback_query.from_user.id
     
@@ -5008,11 +5028,11 @@ async def handle_select_all_routes(update: Update) -> None:
         await update.callback_query.answer("Not in deletion mode")
         return
     
-    state["selected_routes"] = set(routes_data.keys())
+    state["selected_routes"] = set(state["routes_data"].keys())
     
-    await update.callback_query.answer(f"✅ Selected all {len(routes_data)} routes")
+    await update.callback_query.answer(f"✅ Selected all {len(state['routes_data'])} routes")
     
-    total_routes = len(routes_data)
+    total_routes = len(state["routes_data"])
     selected_count = len(state["selected_routes"])
     
     text = (
@@ -5027,10 +5047,10 @@ async def handle_select_all_routes(update: Update) -> None:
         "Select routes to delete:"
     )
     
-    keyboard = get_route_deletion_keyboard(routes_data, state["selected_routes"], state.get("page", 0))
+    keyboard = get_route_deletion_keyboard(state["routes_data"], state["selected_routes"], state.get("page", 0))
     await safe_edit_message(update, text, keyboard)
 
-async def handle_clear_selection(update: Update) -> None:
+async def handle_clear_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Clear all route selections for deletion"""
     user_id = update.callback_query.from_user.id
     
@@ -5066,7 +5086,7 @@ async def handle_clear_selection(update: Update) -> None:
     keyboard = get_route_deletion_keyboard(routes_data, set(), state.get("page", 0))
     await safe_edit_message(update, text, keyboard)
 
-async def handle_confirm_deletion(update: Update) -> None:
+async def handle_confirm_deletion(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Confirm and execute route deletion"""
     user_id = update.callback_query.from_user.id
     
@@ -5093,14 +5113,15 @@ async def handle_confirm_deletion(update: Update) -> None:
         await update.callback_query.answer("❌ User settings not found")
         return
     
+    # Remove selected routes
     routes = user_settings[user_id_str].get("routes", {})
     disabled_routes = user_settings[user_id_str].get("disabled_routes", {})
     
     deleted_count = 0
     
-    # Delete selected routes
     for route_key in selected_routes:
-        try:
+        # Parse route key (source->target)
+        if "->" in route_key:
             source_key, target_key = route_key.split("->", 1)
             
             if source_key in routes and target_key in routes[source_key]:
@@ -5114,53 +5135,78 @@ async def handle_confirm_deletion(update: Update) -> None:
                 # Remove from disabled routes if present
                 if route_key in disabled_routes:
                     del disabled_routes[route_key]
-                    
-        except Exception as e:
-            log_error(f"Error deleting route {route_key} for user {user_id}", e)
     
     user_settings[user_id_str]["routes"] = routes
     user_settings[user_id_str]["disabled_routes"] = disabled_routes
     save_settings()
     
-    # Clean up message mappings for deleted routes
-    
-    
-    await update.callback_query.answer(f"🗑️ Deleted {deleted_count} routes")
-    
-    # Exit deletion mode and return to management
+    # Update local state
     if user_id in route_management_states:
         del route_management_states[user_id]
+    
+    await update.callback_query.answer(f"🗑️ Deleted {deleted_count} routes")
     
     text = f"✅ <b>Routes Deleted Successfully!</b>\n\n🗑️ Deleted <b>{deleted_count}</b> routes."
     
     await safe_edit_message(update, text, get_navigation_keyboard())
     log_activity(f"User {user_id} deleted {deleted_count} routes")
 
-async def handle_quick_add_menu(update: Update) -> None:
+async def handle_quick_add_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle quick add route menu"""
     user_id = update.callback_query.from_user.id
     
-    text = (
-        "✏️ <b>Quick Add Route</b>\n\n"
-        "Quickly add a route by entering both channels in one message.\n\n"
-        "💡 <b>Format:</b>\n"
-        "<code>source_channel destination_channel</code>\n\n"
-        "📝 <b>Examples:</b>\n"
-        "<code>@source_channel @destination_channel</code>\n"
-        "<code>-1001234567890 -1009876543210</code>\n"
-        "<code>@source_channel -1009876543210</code>\n\n"
-        "🔧 <b>Notes:</b>\n"
-        "• Separate source and destination with a space\n"
-        "• You must be a member of the source channel\n"
-        "• The bot needs permission in the destination\n"
-        "• Channels are automatically added to your available channels\n\n"
-        "Send your source and destination channels now:"
-    )
-    
-    keyboard = get_quick_add_keyboard()
-    await safe_edit_message(update, text, keyboard)
-    
-    route_creation_states[user_id] = {"step": "quick_add"}
+    try:
+        user_settings = get_user_settings_fresh(user_id)
+        available_channels = user_settings.get("available_channels", {})
+        
+        if not available_channels:
+            text = (
+                "✏️ <b>Quick Add Route</b>\n\n"
+                "❌ No channels available.\n\n"
+                "💡 <b>How to proceed:</b>\n"
+                "1. First, select some channels using 📋 Select Channels\n"
+                "2. Or add channels manually using ✏️ Enter Manually\n"
+                "3. Save your channel selection\n"
+                "4. Then come back here to create routes quickly\n\n"
+                "Quick add allows you to enter source and destination channels in one go."
+            )
+            
+            keyboard = [
+                [InlineKeyboardButton("📋 Select Channels", callback_data="menu_select_channels")],
+                [InlineKeyboardButton("✏️ Enter Channel Manually", callback_data="manual_input_channels")],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="menu_main")]
+            ]
+            
+            await safe_edit_message(update, text, InlineKeyboardMarkup(keyboard))
+            return
+        
+        text = (
+            "✏️ <b>Quick Add Route</b>\n\n"
+            "Quickly add a route by entering both source and destination channels at once.\n\n"
+            f"📊 Available Channels: <b>{len(available_channels)}</b>\n\n"
+            "💡 <b>Format:</b>\n"
+            "Send message in this format:\n"
+            "<code>source_channel -> destination_channel</code>\n\n"
+            "📝 <b>Examples:</b>\n"
+            "• <code>@source_channel -> @destination_channel</code>\n"
+            "• <code>-100123456789 -> -100987654321</code>\n"
+            "• <code>@source_channel -> -100987654321</code>\n\n"
+            "🔧 <b>Notes:</b>\n"
+            "• Use '->' as separator\n"
+            "• You must be a member of the source channel\n"
+            "• The bot doesn't need to be in source channel\n"
+            "• Bot must have permission in destination channel\n\n"
+            "Send your route in the format above:"
+        )
+        
+        route_creation_states[user_id] = {"step": "quick_add"}
+        
+        keyboard = get_quick_add_keyboard()
+        await safe_edit_message(update, text, keyboard)
+        
+    except Exception as e:
+        log_error(f"Error handling quick add menu for user {user_id}", e)
+        await safe_edit_message(update, "❌ An error occurred while loading quick add.", get_navigation_keyboard())
 
 async def handle_quick_add_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle quick add route input"""
@@ -5175,34 +5221,55 @@ async def handle_quick_add_input(update: Update, context: ContextTypes.DEFAULT_T
     if state.get("step") != "quick_add":
         return
     
-    parts = user_input.split()
-    if len(parts) != 2:
+    # Parse the input format: source -> destination
+    if "->" not in user_input:
         await safe_reply(update,
             "❌ <b>Invalid Format</b>\n\n"
-            "Please provide exactly two channels: source and destination.\n\n"
-            "💡 <b>Correct format:</b>\n"
-            "<code>source_channel destination_channel</code>\n\n"
+            "Please use the format: <code>source_channel -> destination_channel</code>\n\n"
             "📝 <b>Examples:</b>\n"
-            "<code>@source_channel @destination_channel</code>\n"
-            "<code>-1001234567890 -1009876543210</code>\n\n"
+            "• <code>@source_channel -> @destination_channel</code>\n"
+            "• <code>-100123456789 -> -100987654321</code>\n"
+            "• <code>@source_channel -> -100987654321</code>\n\n"
             "Please try again:",
             get_quick_add_keyboard()
         )
         return
     
-    source_input, target_input = parts
+    parts = user_input.split("->", 1)
+    if len(parts) != 2:
+        await safe_reply(update,
+            "❌ <b>Invalid Format</b>\n\n"
+            "Please use exactly one '->' separator.\n\n"
+            "Format: <code>source_channel -> destination_channel</code>\n\n"
+            "Please try again:",
+            get_quick_add_keyboard()
+        )
+        return
+    
+    source_input = parts[0].strip()
+    target_input = parts[1].strip()
+    
+    if not source_input or not target_input:
+        await safe_reply(update,
+            "❌ <b>Empty Channels</b>\n\n"
+            "Both source and destination channels must be provided.\n\n"
+            "Format: <code>source_channel -> destination_channel</code>\n\n"
+            "Please try again:",
+            get_quick_add_keyboard()
+        )
+        return
     
     try:
         # Check membership for source channel
         is_member = await check_membership(source_input, user_id)
         if not is_member:
-            await safe_reply(update,
+            await safe_reply(update, 
                 f"❌ You are not a member of <code>{source_input}</code> or the channel is private.\n\n"
                 "💡 <b>Solutions:</b>\n"
-                "• Make sure you've joined the source channel with this account\n"
+                "• Make sure you've joined the channel with this account\n"
                 "• For private channels, use the numeric ID format\n"
                 "• Check if the channel exists and is accessible\n\n"
-                "Please try again with different channels:",
+                "Please try again with a different source channel:",
                 get_quick_add_keyboard()
             )
             return
@@ -5238,7 +5305,7 @@ async def handle_quick_add_input(update: Update, context: ContextTypes.DEFAULT_T
             user_settings[user_id_str]["routes"] = routes
             save_settings()
             
-            # Also add to available channels if not already there
+            # Add to available channels if not already there
             if source_key not in user_settings[user_id_str]["available_channels"]:
                 user_settings[user_id_str]["available_channels"][source_key] = {
                     "id": source_entity.id,
@@ -5267,7 +5334,6 @@ async def handle_quick_add_input(update: Update, context: ContextTypes.DEFAULT_T
                 f"• Messages from source will be forwarded to destination\n"
                 f"• No 'forwarded from' attribution\n"
                 f"• Instant deletion and editing sync enabled\n"
-                f"• Both channels added to your available channels\n"
                 f"• Use 🚀 Start All to begin forwarding\n\n"
                 f"🔧 <b>Note:</b> Make sure the bot has permission to send messages in the destination channel!"
             )
@@ -5299,125 +5365,516 @@ async def handle_quick_add_input(update: Update, context: ContextTypes.DEFAULT_T
             )
         else:
             await safe_reply(update,
-                f"❌ <b>Error Processing Channels</b>\n\n"
+                f"❌ <b>Error Processing Route</b>\n\n"
                 f"An error occurred while processing <code>{user_input}</code>.\n\n"
                 f"Error: {error_msg}\n\n"
                 "Please try again with different channels:",
                 get_quick_add_keyboard()
             )
 
-# ========= BOT SETUP AND STARTUP =========
+async def handle_start_forwarding(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Start all forwarding for the user"""
+    user_id = update.callback_query.from_user.id
+    
+    try:
+        user_id_str = str(user_id)
+        refresh_user_settings()
+        
+        if user_id_str not in user_settings:
+            user_settings[user_id_str] = {
+                "routes": {},
+                "forwarding": False,
+                "disabled_routes": {},
+                "available_channels": {},
+                "required_keywords": [],
+                "blocked_keywords": [],
+                "allowed_media_types": list(SUPPORTED_MEDIA_TYPES.keys()) + ["text"]
+            }
+        
+        user_settings[user_id_str]["forwarding"] = True
+        save_settings()
+        
+        routes_count = len(user_settings[user_id_str].get("routes", {}))
+        
+        text = (
+            f"🚀 <b>Forwarding Started!</b>\n\n"
+            f"📊 Active Routes: <b>{routes_count}</b>\n\n"
+            "💡 <b>What happens now:</b>\n"
+            "• Messages from your source channels will be forwarded to destinations\n"
+            "• No 'forwarded from' attribution\n"
+            "• Instant deletion and editing sync enabled\n"
+            "• Use 🛑 Stop All to pause forwarding\n\n"
+            "🔧 <b>Note:</b> Make sure the bot has proper permissions in all destination channels!"
+        )
+        
+        await safe_edit_message(update, text, get_navigation_keyboard())
+        log_activity(f"User {user_id} started forwarding for {routes_count} routes")
+        
+    except Exception as e:
+        log_error(f"Error starting forwarding for user {user_id}", e)
+        await safe_edit_message(update, "❌ An error occurred while starting forwarding.", get_navigation_keyboard())
+
+async def handle_stop_forwarding(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Stop all forwarding for the user"""
+    user_id = update.callback_query.from_user.id
+    
+    try:
+        user_id_str = str(user_id)
+        refresh_user_settings()
+        
+        if user_id_str in user_settings:
+            user_settings[user_id_str]["forwarding"] = False
+            save_settings()
+            
+            routes_count = len(user_settings[user_id_str].get("routes", {}))
+            
+            text = (
+                f"🛑 <b>Forwarding Stopped!</b>\n\n"
+                f"📊 Paused Routes: <b>{routes_count}</b>\n\n"
+                "💡 <b>What happens now:</b>\n"
+                "• No new messages will be forwarded\n"
+                "• Existing routes remain configured\n"
+                "• Use 🚀 Start All to resume forwarding\n"
+                "• Message deletion and editing sync will still work\n\n"
+                "🔧 Your routes are preserved and can be restarted anytime."
+            )
+            
+            log_activity(f"User {user_id} stopped forwarding for {routes_count} routes")
+        else:
+            text = "❌ No forwarding was active."
+        
+        await safe_edit_message(update, text, get_navigation_keyboard())
+        
+    except Exception as e:
+        log_error(f"Error stopping forwarding for user {user_id}", e)
+        await safe_edit_message(update, "❌ An error occurred while stopping forwarding.", get_navigation_keyboard())
+
+async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show current bot status"""
+    user_id = update.callback_query.from_user.id
+    
+    try:
+        user_settings = get_user_settings_fresh(user_id)
+        routes = user_settings.get("routes", {})
+        available_channels = user_settings.get("available_channels", {})
+        disabled_routes = user_settings.get("disabled_routes", {})
+        
+        total_routes = sum(len(targets) for targets in routes.values())
+        enabled_routes = total_routes - len(disabled_routes)
+        
+        # Get Discord routes
+        discord_routes = get_user_discord_routes(user_id)
+        total_discord_routes = sum(len(channels) for channels in discord_routes.values())
+        
+        # Get media stats
+        user_media_stats = media_forwarding_stats.get(str(user_id), {})
+        total_forwarded = sum(stats["success"] for stats in user_media_stats.values())
+        
+        text = (
+            "📊 <b>Bot Status</b>\n\n"
+            f"⚡ <b>Forwarding Status:</b> {'✅ ACTIVE' if user_settings.get('forwarding') else '❌ PAUSED'}\n\n"
+            f"📋 <b>Channels:</b> {len(available_channels)} selected\n"
+            f"🔄 <b>Telegram Routes:</b> {enabled_routes}/{total_routes} active\n"
+            f"🔗 <b>Discord Routes:</b> {total_discord_routes}\n"
+            f"📨 <b>Messages Forwarded:</b> {total_forwarded}\n\n"
+            f"🔤 <b>Keyword Filters:</b>\n"
+            f"• ✅ Required: {len(user_settings.get('required_keywords', []))}\n"
+            f"• ❌ Blocked: {len(user_settings.get('blocked_keywords', []))}\n\n"
+            f"🖼️ <b>Media Filters:</b> {len(user_settings.get('allowed_media_types', []))}/{len(SUPPORTED_MEDIA_TYPES) + 1} types allowed\n\n"
+            "💡 <b>Quick Actions:</b>\n"
+            "Use the buttons below to manage your setup."
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton("🚀 Start Forwarding", callback_data="menu_start_forward"),
+             InlineKeyboardButton("🛑 Stop Forwarding", callback_data="menu_stop_forward")],
+            [InlineKeyboardButton("📋 View Routes", callback_data="menu_list_routes"),
+             InlineKeyboardButton("🔗 Discord Routes", callback_data="menu_discord_routes")],
+            [InlineKeyboardButton("⚡ Deletion Stats", callback_data="menu_deletion_stats"),
+             InlineKeyboardButton("🖼️ Media Stats", callback_data="menu_media_stats")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="menu_main")]
+        ]
+        
+        await safe_edit_message(update, text, InlineKeyboardMarkup(keyboard))
+        
+    except Exception as e:
+        log_error(f"Error showing status for user {user_id}", e)
+        await safe_edit_message(update, "❌ An error occurred while loading status.", get_navigation_keyboard())
+
+async def handle_media_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show media forwarding statistics"""
+    user_id = update.callback_query.from_user.id
+    
+    try:
+        user_media_stats = media_forwarding_stats.get(str(user_id), {})
+        
+        if not user_media_stats:
+            text = (
+                "🖼️ <b>Media Forwarding Statistics</b>\n\n"
+                "No media forwarding statistics available yet.\n\n"
+                "Statistics will appear here after messages are forwarded."
+            )
+        else:
+            lines = []
+            total_success = 0
+            total_failed = 0
+            
+            for media_type, stats in user_media_stats.items():
+                success = stats.get("success", 0)
+                failed = stats.get("failed", 0)
+                total = success + failed
+                success_rate = (success / total * 100) if total > 0 else 0
+                
+                display_name = MEDIA_TYPE_DISPLAY_NAMES.get(media_type, media_type)
+                lines.append(f"• {display_name}: {success} ✅ / {failed} ❌ ({success_rate:.1f}%)")
+                
+                total_success += success
+                total_failed += failed
+            
+            total_forwarded = total_success + total_failed
+            overall_success_rate = (total_success / total_forwarded * 100) if total_forwarded > 0 else 0
+            
+            text = (
+                f"🖼️ <b>Media Forwarding Statistics</b>\n\n"
+                f"📊 <b>Overview:</b>\n"
+                f"• Total Forwarded: {total_forwarded}\n"
+                f"• Successful: {total_success} ✅\n"
+                f"• Failed: {total_failed} ❌\n"
+                f"• Success Rate: {overall_success_rate:.1f}%\n\n"
+                f"📈 <b>By Media Type:</b>\n" +
+                "\n".join(lines) +
+                f"\n\n💡 Statistics are reset when the bot restarts."
+            )
+        
+        keyboard = [
+            [InlineKeyboardButton("🔄 Refresh Stats", callback_data="menu_media_stats")],
+            [InlineKeyboardButton("📊 Overall Status", callback_data="menu_status")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="menu_main")]
+        ]
+        
+        await safe_edit_message(update, text, InlineKeyboardMarkup(keyboard))
+        
+    except Exception as e:
+        log_error(f"Error showing media stats for user {user_id}", e)
+        await safe_edit_message(update, "❌ An error occurred while loading media statistics.", get_navigation_keyboard())
+
+async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show comprehensive help information"""
+    text = (
+        "❓ <b>Help & Guide</b>\n\n"
+        
+        "🤖 <b>What This Bot Does:</b>\n"
+        "• Automatically forwards messages between Telegram channels/groups\n"
+        "• Removes 'forwarded from' attribution\n"
+        "• Syncs message deletions instantly\n"
+        "• Syncs message edits instantly\n"
+        "• Supports Discord integration\n"
+        "• Advanced filtering options\n\n"
+        
+        "🚀 <b>Quick Start Guide:</b>\n"
+        "1. <b>Select Channels</b> - Choose source channels to monitor\n"
+        "2. <b>Add Routes</b> - Connect sources to destinations\n"
+        "3. <b>Configure Filters</b> - Set up keyword and media filters\n"
+        "4. <b>Start Forwarding</b> - Activate the bot\n\n"
+        
+        "⚙️ <b>Key Features:</b>\n"
+        "• <b>Instant Deletion Sync</b> - Delete in source, deleted everywhere\n"
+        "• <b>Message Edit Sync</b> - Edit in source, edited everywhere\n"
+        "• <b>No Attribution</b> - Messages appear as sent by bot\n"
+        "• <b>Media Filtering</b> - Choose which media types to forward\n"
+        "• <b>Keyword Filtering</b> - Forward only specific content\n"
+        "• <b>Discord Integration</b> - Forward to Discord channels\n"
+        "• <b>Multiple Routes</b> - One source to multiple destinations\n\n"
+        
+        "🔧 <b>Requirements:</b>\n"
+        "• You must be member of source channels\n"
+        "• Bot needs permission in destination channels\n"
+        "• For Discord: Bot token or webhook URL\n\n"
+        
+        "💡 <b>Tips:</b>\n"
+        "• Start with a few routes and expand gradually\n"
+        "• Test your keyword filters before relying on them\n"
+        "• Ensure bot has proper permissions in all channels\n"
+        "• Monitor the bot status regularly\n\n"
+        
+        "❌ <b>Troubleshooting:</b>\n"
+        "• If forwarding stops, check bot permissions\n"
+        "• If deletions don't sync, ensure bot is admin\n"
+        "• For Discord issues, verify token/webhook\n"
+        "• Check logs for detailed error information\n\n"
+        
+        "Need more help? Check the main menu for all available options!"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="menu_main")],
+        [InlineKeyboardButton("📊 Status", callback_data="menu_status")],
+        [InlineKeyboardButton("🔗 Discord Help", callback_data="discord_settings")]
+    ]
+    
+    await safe_edit_message(update, text, InlineKeyboardMarkup(keyboard))
+
+# ========= MESSAGE HANDLER DISPATCHER =========
+async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Dispatch text messages to appropriate handlers based on user state"""
+    user_id = update.message.from_user.id
+    
+    # Check for keyword input first
+    if user_id in keyword_management_states:
+        state = keyword_management_states[user_id]
+        editing_mode = state.get("editing_mode")
+        if editing_mode and editing_mode.startswith("adding_"):
+            await handle_keyword_input(update, context)
+            return
+    
+    # Check for channel input (route creation)
+    if user_id in route_creation_states:
+        await handle_channel_input(update, context)
+        return
+    
+    # Check for Discord channel input
+    if user_id in discord_route_states:
+        state = discord_route_states[user_id]
+        if state.get("step") == "entering_discord_channel":
+            await handle_discord_channel_input(update, context)
+            return
+    
+    # Check for quick add route input
+    if user_id in route_creation_states:
+        state = route_creation_states[user_id]
+        if state.get("step") == "quick_add":
+            await handle_quick_add_input(update, context)
+            return
+    
+    # If no specific state, show main menu
+    await safe_reply(update, 
+        "🤖 <b>Telegram Auto-Forward Bot</b>\n\n"
+        "I didn't understand that command. Please use the buttons below to interact with me.",
+        get_main_menu_keyboard()
+    )
+
+# ========= CALLBACK QUERY HANDLER =========
+async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle all callback queries from inline keyboards"""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    
+    try:
+        # Main menu navigation
+        if data == "menu_main":
+            await handle_main_menu(update, context)
+        elif data == "menu_select_channels":
+            await handle_channel_selection_menu(update, context)
+        elif data == "menu_manage_channels":
+            await handle_manage_channels_menu(update, context)
+        elif data == "menu_keyword_management":
+            await start_keyword_management(update, context)
+        elif data == "menu_media_filters":
+            await start_media_filter_management(update, context)
+        elif data == "menu_add_route":
+            await handle_add_route_menu(update, context)
+        elif data == "menu_list_routes":
+            await handle_list_routes(update, context)
+        elif data == "menu_manage_routes":
+            await handle_manage_routes_menu(update, context)
+        elif data == "menu_quick_add":
+            await handle_quick_add_menu(update, context)
+        elif data == "menu_discord_routes":
+            await start_discord_route_management(update, context)
+        elif data == "menu_start_forward":
+            await handle_start_forwarding(update, context)
+        elif data == "menu_stop_forward":
+            await handle_stop_forwarding(update, context)
+        elif data == "menu_status":
+            await handle_status(update, context)
+        elif data == "menu_media_stats":
+            await handle_media_stats(update, context)
+        elif data == "menu_deletion_stats":
+            await show_deletion_performance(update, context)
+        elif data == "menu_check_permissions":
+            await check_bot_permissions(update, context)
+        elif data == "menu_help":
+            await show_help(update, context)
+        
+        # Channel selection and management
+        elif data == "browse_channels":
+            await handle_browse_channels(update, context)
+        elif data.startswith("toggle_channel_"):
+            parts = data.split("_")
+            channel_id = parts[2]
+            page = int(parts[3])
+            await handle_channel_toggle(update, context, channel_id, page)
+        elif data.startswith("channel_sel_page_"):
+            page = int(data.split("_")[3])
+            await handle_channel_selection_pagination(update, context, page)
+        elif data == "save_channel_selection":
+            await handle_save_channel_selection(update, context)
+        elif data == "select_all_channels":
+            await handle_select_all_channels(update, context)
+        elif data == "clear_all_channels":
+            await handle_clear_all_channels(update, context)
+        elif data.startswith("channel_mgmt_page_"):
+            page = int(data.split("_")[3])
+            await handle_channel_management_pagination(update, context, page)
+        elif data.startswith("remove_channel_"):
+            parts = data.split("_")
+            channel_key = parts[2]
+            page = int(parts[3])
+            await handle_channel_removal(update, context, channel_key, page)
+        elif data == "remove_all_channels":
+            await handle_remove_all_channels(update, context)
+        
+        # Manual channel input
+        elif data.startswith("manual_input_"):
+            step = data.split("_")[2]
+            await handle_manual_channel_input(update, context, step)
+        
+        # Route management
+        elif data == "select_route_channels":
+            await handle_select_route_channels(update, context)
+        elif data.startswith("route_select_"):
+            parts = data.split("_")
+            step = parts[2]
+            channel_key = parts[3]
+            page = int(parts[4])
+            await handle_route_channel_selection(update, context, step, channel_key, page)
+        elif data.startswith("route_"):
+            if "_page_" in data:
+                parts = data.split("_")
+                step = parts[1]
+                page = int(parts[3])
+                await handle_route_selection_pagination(update, context, step, page)
+        elif data == "manual_route_input":
+            await handle_manual_channel_input(update, context, "source")
+        
+        # Route toggling and pagination
+        elif data.startswith("toggle_route_"):
+            parts = data.split("_")
+            route_key = "_".join(parts[2:-1])
+            page = int(parts[-1])
+            await handle_route_toggle(update, context, route_key, page)
+        elif data.startswith("routes_page_"):
+            page = int(data.split("_")[2])
+            await handle_route_management_pagination(update, context, page)
+        elif data == "enable_all_routes":
+            await handle_enable_all_routes(update, context)
+        elif data == "disable_all_routes":
+            await handle_disable_all_routes(update, context)
+        
+        # Route deletion
+        elif data == "delete_routes_mode":
+            await handle_delete_routes_mode(update, context)
+        elif data.startswith("toggle_delete_"):
+            parts = data.split("_")
+            route_key = "_".join(parts[2:-1])
+            page = int(parts[-1])
+            await handle_route_deletion_toggle(update, context, route_key, page)
+        elif data.startswith("delete_page_"):
+            page = int(data.split("_")[2])
+            await handle_deletion_pagination(update, context, page)
+        elif data == "select_all_routes":
+            await handle_select_all_routes(update, context)
+        elif data == "clear_selection":
+            await handle_clear_selection(update, context)
+        elif data == "confirm_deletion":
+            await handle_confirm_deletion(update, context)
+        
+        # Keyword management
+        elif data == "edit_required_keywords":
+            await handle_keyword_editing_mode(update, context)
+        elif data == "edit_blocked_keywords":
+            await handle_keyword_editing_mode(update, context)
+        elif data.startswith("remove_keyword_"):
+            parts = data.split("_")
+            keyword_type = parts[2]
+            index = int(parts[3])
+            await handle_keyword_removal(update, context, keyword_type, index)
+        elif data.startswith("clear_keywords_"):
+            keyword_type = data.split("_")[2]
+            await handle_clear_keywords(update, context, keyword_type)
+        elif data.startswith("add_keyword_"):
+            await handle_add_keyword_mode(update, context)
+        elif data == "save_keyword_settings":
+            await save_keyword_settings(update, context)
+        elif data == "reset_all_keywords":
+            await handle_reset_all_keywords(update, context)
+        elif data == "keyword_filtering_help":
+            await show_keyword_filtering_help(update, context)
+        
+        # Media filter management
+        elif data.startswith("toggle_media_"):
+            media_type = data.split("_")[2]
+            await handle_media_type_toggle(update, context, media_type)
+        elif data == "allow_all_media":
+            await handle_bulk_media_actions(update, context, "allow_all_media")
+        elif data == "block_all_media":
+            await handle_bulk_media_actions(update, context, "block_all_media")
+        elif data == "save_media_filters":
+            await save_media_filters(update, context)
+        
+        # Discord route management
+        elif data == "add_discord_route":
+            await start_add_discord_route(update, context)
+        elif data == "view_discord_routes":
+            await view_discord_routes(update, context)
+        elif data == "delete_discord_route":
+            await start_delete_discord_route(update, context)
+        elif data == "discord_settings":
+            await show_discord_settings(update, context)
+        elif data == "continue_webhook_discord":
+            await handle_continue_webhook_discord(update, context)
+        elif data.startswith("discord_select_source_"):
+            parts = data.split("_")
+            channel_key = parts[3]
+            page = int(parts[4])
+            await handle_discord_source_selection(update, context, channel_key, page)
+        elif data.startswith("discord_source_page_"):
+            page = int(data.split("_")[3])
+            await handle_discord_source_pagination(update, context, page)
+        elif data == "discord_back_to_sources":
+            await handle_discord_back_to_sources(update, context)
+        elif data.startswith("discord_delete_"):
+            parts = data.split("_")
+            route_key = parts[2]
+            page = int(parts[3])
+            await handle_discord_route_deletion(update, context, route_key, page)
+        elif data.startswith("discord_del_page_"):
+            page = int(data.split("_")[3])
+            await handle_discord_deletion_pagination(update, context, page)
+        
+        else:
+            log_activity(f"Unknown callback data: {data}")
+            await query.answer("❌ Unknown command")
+    
+    except Exception as e:
+        log_error(f"Error handling callback query: {data}", e)
+        await query.answer("❌ An error occurred")
+
+# ========= MAIN FUNCTION =========
 def main() -> None:
     """Start the bot."""
     # Create the Application and pass it your bot's token.
     application = Application.builder().token(BOT_TOKEN).build()
 
-    # Setup message mapping files
+    # Add handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(handle_callback_query))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+
+    # Initialize message tracking files
     setup_message_mappings_file()
     setup_discord_message_mappings_file()
-
-    # Add command handlers
-    application.add_handler(CommandHandler("start", start))
-
-    # Add callback query handlers
-    application.add_handler(CallbackQueryHandler(handle_main_menu, pattern="^menu_main$"))
-    application.add_handler(CallbackQueryHandler(handle_channel_selection_menu, pattern="^menu_select_channels$"))
-    application.add_handler(CallbackQueryHandler(handle_manage_channels_menu, pattern="^menu_manage_channels$"))
-    application.add_handler(CallbackQueryHandler(handle_browse_channels, pattern="^browse_channels$"))
-    application.add_handler(CallbackQueryHandler(handle_save_channel_selection, pattern="^save_channel_selection$"))
-    application.add_handler(CallbackQueryHandler(handle_select_all_channels, pattern="^select_all_channels$"))
-    application.add_handler(CallbackQueryHandler(handle_clear_all_channels, pattern="^clear_all_channels$"))
-    application.add_handler(CallbackQueryHandler(handle_remove_all_channels, pattern="^remove_all_channels$"))
     
-    # Channel selection pagination
-    application.add_handler(CallbackQueryHandler(handle_channel_selection_pagination, pattern="^channel_sel_page_"))
-    application.add_handler(CallbackQueryHandler(handle_channel_toggle, pattern="^toggle_channel_"))
-    
-    # Channel management pagination
-    application.add_handler(CallbackQueryHandler(handle_channel_management_pagination, pattern="^channel_mgmt_page_"))
-    application.add_handler(CallbackQueryHandler(handle_channel_removal, pattern="^remove_channel_"))
-    
-    # Manual channel input
-    application.add_handler(CallbackQueryHandler(handle_manual_channel_input, pattern="^manual_input_"))
-    
-    # Route management
-    application.add_handler(CallbackQueryHandler(handle_add_route_menu, pattern="^menu_add_route$"))
-    application.add_handler(CallbackQueryHandler(handle_list_routes, pattern="^menu_list_routes$"))
-    application.add_handler(CallbackQueryHandler(handle_manage_routes_menu, pattern="^menu_manage_routes$"))
-    application.add_handler(CallbackQueryHandler(handle_quick_add_menu, pattern="^menu_quick_add$"))
-    
-    # Route selection
-    application.add_handler(CallbackQueryHandler(handle_select_route_channels, pattern="^select_route_channels$"))
-    application.add_handler(CallbackQueryHandler(handle_route_channel_selection, pattern="^route_select_"))
-    application.add_handler(CallbackQueryHandler(handle_route_selection_pagination, pattern="^route_(source|target)_page_"))
-    
-    # Route management actions
-    application.add_handler(CallbackQueryHandler(handle_route_toggle, pattern="^toggle_route_"))
-    application.add_handler(CallbackQueryHandler(handle_route_management_pagination, pattern="^routes_page_"))
-    application.add_handler(CallbackQueryHandler(handle_enable_all_routes, pattern="^enable_all_routes$"))
-    application.add_handler(CallbackQueryHandler(handle_disable_all_routes, pattern="^disable_all_routes$"))
-    
-    # Route deletion
-    application.add_handler(CallbackQueryHandler(handle_delete_routes_mode, pattern="^delete_routes_mode$"))
-    application.add_handler(CallbackQueryHandler(handle_route_deletion_toggle, pattern="^toggle_delete_"))
-    application.add_handler(CallbackQueryHandler(handle_deletion_pagination, pattern="^delete_page_"))
-    application.add_handler(CallbackQueryHandler(handle_select_all_routes, pattern="^select_all_routes$"))
-    application.add_handler(CallbackQueryHandler(handle_clear_selection, pattern="^clear_selection$"))
-    application.add_handler(CallbackQueryHandler(handle_confirm_deletion, pattern="^confirm_deletion$"))
-    
-    # Keyword filtering
-    application.add_handler(CallbackQueryHandler(start_keyword_management, pattern="^menu_keyword_management$"))
-    application.add_handler(CallbackQueryHandler(handle_keyword_editing_mode, pattern="^edit_(required|blocked)_keywords$"))
-    application.add_handler(CallbackQueryHandler(handle_keyword_removal, pattern="^remove_keyword_"))
-    application.add_handler(CallbackQueryHandler(handle_clear_keywords, pattern="^clear_keywords_"))
-    application.add_handler(CallbackQueryHandler(handle_add_keyword_mode, pattern="^add_keyword_"))
-    application.add_handler(CallbackQueryHandler(save_keyword_settings, pattern="^save_keyword_settings$"))
-    application.add_handler(CallbackQueryHandler(handle_reset_all_keywords, pattern="^reset_all_keywords$"))
-    application.add_handler(CallbackQueryHandler(show_keyword_filtering_help, pattern="^keyword_filtering_help$"))
-    
-    # Media filtering
-    application.add_handler(CallbackQueryHandler(start_media_filter_management, pattern="^menu_media_filters$"))
-    application.add_handler(CallbackQueryHandler(handle_media_type_toggle, pattern="^toggle_media_"))
-    application.add_handler(CallbackQueryHandler(handle_bulk_media_actions, pattern="^(allow_all_media|block_all_media)$"))
-    application.add_handler(CallbackQueryHandler(save_media_filters, pattern="^save_media_filters$"))
-    
-    # Discord routes
-    application.add_handler(CallbackQueryHandler(start_discord_route_management, pattern="^menu_discord_routes$"))
-    application.add_handler(CallbackQueryHandler(start_add_discord_route, pattern="^add_discord_route$"))
-    application.add_handler(CallbackQueryHandler(handle_continue_webhook_discord, pattern="^continue_webhook_discord$"))
-    application.add_handler(CallbackQueryHandler(view_discord_routes, pattern="^view_discord_routes$"))
-    application.add_handler(CallbackQueryHandler(start_delete_discord_route, pattern="^delete_discord_route$"))
-    application.add_handler(CallbackQueryHandler(show_discord_settings, pattern="^discord_settings$"))
-    
-    # Discord route selection and pagination
-    application.add_handler(CallbackQueryHandler(handle_discord_source_selection, pattern="^discord_select_source_"))
-    application.add_handler(CallbackQueryHandler(handle_discord_source_pagination, pattern="^discord_source_page_"))
-    application.add_handler(CallbackQueryHandler(handle_discord_back_to_sources, pattern="^discord_back_to_sources$"))
-    application.add_handler(CallbackQueryHandler(handle_discord_route_deletion, pattern="^discord_delete_"))
-    application.add_handler(CallbackQueryHandler(handle_discord_deletion_pagination, pattern="^discord_del_page_"))
-    
-    # Performance monitoring
-    application.add_handler(CallbackQueryHandler(show_deletion_performance, pattern="^menu_deletion_stats$"))
-    application.add_handler(CallbackQueryHandler(check_bot_permissions, pattern="^menu_check_permissions$"))
-
-    # Add message handlers for manual input
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_channel_input))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_discord_channel_input))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_keyword_input))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_quick_add_input))
-
-    # Start the Bot
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
-
-if __name__ == "__main__":
-    # Initialize the Telegram client and start both bots
-    loop = asyncio.get_event_loop()
+    # Load initial settings
+    refresh_user_settings()
     
     # Start the Telegram client
     client.start()
     
-    # Start the Telegram bot
+    # Run the bot until the user presses Ctrl-C
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+if __name__ == "__main__":
     main()
-    
-    # Run the client until disconnected
-    client.run_until_disconnected()

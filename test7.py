@@ -1,3 +1,6 @@
+# INSTRUCTIONS
+I want under keyword filtering there should be general keywords and route specific keywords, both required an blocked, apart from the general keyword filters I want when create each route whether telegram or discord the user should have the option(not compulsory) to add route specific keyword filters, all the keywords. Generate fully updated code.
+# CODE
 import os
 import asyncio
 import json

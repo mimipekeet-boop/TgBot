@@ -3,7 +3,8 @@ tests/
 *.md
 virt/
 *.env
-*.txt
+
 *.exe
+
 *.db
 *.session*

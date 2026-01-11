@@ -7,4 +7,3 @@ virt/
 *.exe
 
 *.db
-*.session*

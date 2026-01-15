@@ -1,5 +1,5 @@
 tests/
-*.json
+
 *.md
 virt/
 *.env

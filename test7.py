@@ -2751,7 +2751,7 @@ async def get_user_channels(user_id: int) -> List[Dict[str, Any]]:
     try:
         channels = []
         
-        dialogs = await client.get_dialogs(limit=150)
+        dialogs = await client.get_dialogs(limit=500)
         
         for dialog in dialogs:
             entity = dialog.entity

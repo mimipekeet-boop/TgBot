@@ -2751,7 +2751,7 @@ async def get_user_channels(user_id: int) -> List[Dict[str, Any]]:
     try:
         channels = []
         
-        dialogs = await client.get_dialogs(limit=500)
+        dialogs = await client.get_dialogs(limit=150)
         
         for dialog in dialogs:
             entity = dialog.entity
@@ -4238,7 +4238,7 @@ async def handle_channel_input(update: Update, context: ContextTypes.DEFAULT_TYP
             )
 
 async def complete_route_creation(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int) -> None:
-    """Complete the route creation process"""
+    """Complete the route creation process using only channel IDs"""
     try:
         state = route_creation_states[user_id]
         source_input = state.get("source")
@@ -4248,7 +4248,7 @@ async def complete_route_creation(update: Update, context: ContextTypes.DEFAULT_
             await safe_reply(update, "❌ Missing source or destination channel. Please start again.", get_navigation_keyboard())
             return
         
-        # Get entities for display
+        # Get channel entities for display only
         source_entity = state.get("source_entity")
         target_entity = state.get("target_entity")
         
@@ -4256,12 +4256,19 @@ async def complete_route_creation(update: Update, context: ContextTypes.DEFAULT_
             await safe_reply(update, "❌ Could not resolve channels. Please start again.", get_navigation_keyboard())
             return
         
-        source_key = source_entity.username or str(source_entity.id)
-        target_key = target_entity.username or str(target_entity.id)
+        # Store only channel IDs for internal use
+        source_key = str(source_entity.id)  # Use only channel ID
+        target_key = str(target_entity.id)  # Use only channel ID
         
+        # Create display strings for user feedback
+        source_display = f"@{source_entity.username}" if source_entity.username else f"ID: {source_entity.id}"
+        target_display = f"@{target_entity.username}" if target_entity.username else f"ID: {target_entity.id}"
+        
+        # Get user settings
         user_id_str = str(user_id)
         refresh_user_settings()
         
+        # Initialize user settings if not exists
         if user_id_str not in user_settings:
             user_settings[user_id_str] = {
                 "routes": {},
@@ -4273,8 +4280,10 @@ async def complete_route_creation(update: Update, context: ContextTypes.DEFAULT_
                 "allowed_media_types": list(SUPPORTED_MEDIA_TYPES.keys()) + ["text"]
             }
         
+        # Get existing routes
         routes = user_settings[user_id_str].get("routes", {})
         
+        # Create route using channel IDs only
         if source_key not in routes:
             routes[source_key] = []
         
@@ -4283,9 +4292,7 @@ async def complete_route_creation(update: Update, context: ContextTypes.DEFAULT_
             user_settings[user_id_str]["routes"] = routes
             save_settings()
             
-            source_display = f"@{source_entity.username}" if source_entity.username else f"ID: {source_entity.id}"
-            target_display = f"@{target_entity.username}" if target_entity.username else f"ID: {target_entity.id}"
-            
+            # Success message
             text = (
                 f"✅ <b>Route Added Successfully!</b>\n\n"
                 f"🔄 <b>New Route:</b>\n"
@@ -4296,13 +4303,15 @@ async def complete_route_creation(update: Update, context: ContextTypes.DEFAULT_
                 f"• No 'forwarded from' attribution\n"
                 f"• Instant deletion and editing sync enabled\n"
                 f"• Use 🚀 Start All to begin forwarding\n\n"
-                f"🔧 <b>Note:</b> Make sure the bot has permission to send messages in the destination channel!"
+                f"🔧 <b>Important:</b> The bot uses channel IDs internally. Usernames are for display only.\n\n"
+                f"📝 <b>Note:</b> Make sure the bot has permission to send messages in the destination channel!"
             )
             
-            log_activity(f"User {user_id} added route: {source_display} → {target_display}")
+            log_activity(f"User {user_id} added route: {source_key} → {target_key}")
         else:
             text = f"⚠️ Route already exists."
         
+        # Clean up state
         if user_id in route_creation_states:
             del route_creation_states[user_id]
         
@@ -4403,28 +4412,38 @@ async def handle_select_route_channels(update: Update, context: ContextTypes.DEF
         await safe_edit_message(update, "❌ An error occurred while loading channels.", get_navigation_keyboard())
 
 def create_route_selection_keyboard(available_channels: Dict, step: str, page: int = 0, items_per_page: int = 8):
-    """Create keyboard for route channel selection"""
+    """Create keyboard for route channel selection with user-friendly display - UPDATED to handle underscores"""
     keyboard = []
     
+    # Convert dict items to list
     channels_list = list(available_channels.items())
     
+    # Calculate pagination
     start_idx = page * items_per_page
     end_idx = start_idx + items_per_page
     page_channels = channels_list[start_idx:end_idx]
     
-    for channel_key, channel_info in page_channels:
+    # Create buttons for each channel
+    for channel_id, channel_info in page_channels:
+        # Create user-friendly display name
         display_name = f"📢 {channel_info['title']}"
-        if channel_info['username']:
+        
+        # Add username if available for UI clarity
+        if channel_info.get('username'):
             display_name += f" (@{channel_info['username']})"
         else:
             display_name += f" (ID: {channel_info['id']})"
         
+        # Truncate if too long
         if len(display_name) > 40:
             display_name = display_name[:37] + "..."
         
-        callback_data = f"route_select_{step}_{channel_key}_{page}"
+        # Use the stored key (which could be username with underscores) as callback data
+        # The handler will parse this correctly
+        callback_data = f"route_select_{step}_{channel_id}_{page}"
         keyboard.append([InlineKeyboardButton(display_name, callback_data=callback_data)])
     
+    # Navigation buttons
     navigation_buttons = []
     total_pages = (len(channels_list) + items_per_page - 1) // items_per_page
     
@@ -4437,17 +4456,19 @@ def create_route_selection_keyboard(available_channels: Dict, step: str, page: i
     if navigation_buttons:
         keyboard.append(navigation_buttons)
     
+    # Manual input buttons
     if step == "source":
         keyboard.append([InlineKeyboardButton("✏️ Enter Source Manually", callback_data="manual_input_source")])
     else:
         keyboard.append([InlineKeyboardButton("✏️ Enter Destination Manually", callback_data="manual_input_target")])
     
+    # Cancel button
     keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="menu_add_route")])
     
     return InlineKeyboardMarkup(keyboard)
 
 async def handle_route_channel_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, step: str, channel_key: str, page: int) -> None:
-    """Handle channel selection for route creation"""
+    """Handle channel selection for route creation - UPDATED to handle underscores in channel keys"""
     user_id = update.callback_query.from_user.id
     
     if user_id not in manual_route_states:
@@ -4457,16 +4478,45 @@ async def handle_route_channel_selection(update: Update, context: ContextTypes.D
     state = manual_route_states[user_id]
     available_channels = state["available_channels"]
     
-    if channel_key not in available_channels:
+    # First, try to find the channel by key (this handles both ID and username with underscores)
+    channel_info = None
+    
+    # Check if it's a numeric ID
+    if channel_key.lstrip('-').isdigit():
+        # Look for channel by ID
+        for key, info in available_channels.items():
+            if info.get("id") == int(channel_key.lstrip('-')):
+                channel_info = info
+                channel_key = key  # Use the stored key (which might be different format)
+                break
+    
+    # If not found by ID, try to find by username
+    if not channel_info:
+        # Check if it's a username (could contain underscores)
+        for key, info in available_channels.items():
+            if info.get("username") == channel_key:
+                channel_info = info
+                channel_key = key
+                break
+    
+    if not channel_info:
+        # If still not found, try direct lookup
+        channel_info = available_channels.get(channel_key)
+    
+    if not channel_info:
         await update.callback_query.answer("Channel not found")
         return
     
-    channel_info = available_channels[channel_key]
-    state[step] = channel_key
+    # Store only the channel ID for internal use
+    state[step] = str(channel_info["id"])  # This is now the channel ID
+    state[f"{step}_display"] = channel_info["title"]
+    state[f"{step}_username"] = channel_info.get("username")
     
     if step == "source":
         state["step"] = "select_target"
-        channel_display = f"@{channel_info['username']}" if channel_info['username'] else f"{channel_info['title']} (ID: {channel_info['id']})"
+        
+        # Display user-friendly info
+        channel_display = f"@{channel_info['username']}" if channel_info.get('username') else f"{channel_info['title']} (ID: {channel_info['id']})"
         
         text = (
             f"✅ <b>Source Channel Selected:</b> {channel_display}\n\n"
@@ -4484,7 +4534,7 @@ async def handle_route_channel_selection(update: Update, context: ContextTypes.D
     await update.callback_query.answer(f"Selected: {channel_info['title']}")
 
 async def handle_route_selection_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE, step: str, page: int) -> None:
-    """Handle pagination in route channel selection"""
+    """Handle pagination in route channel selection - UPDATED to handle underscores"""
     user_id = update.callback_query.from_user.id
     
     if user_id not in manual_route_states:
@@ -4499,27 +4549,36 @@ async def handle_route_selection_pagination(update: Update, context: ContextType
     text = (
         f"📋 <b>Select {step_display} Channel</b>\n\n"
         f"Choose the {step_display.lower()} channel:\n\n"
-        f"📊 Available Channels: <b>{len(available_channels)}</b>"
+        f"📊 Available Channels: <b>{len(available_channels)}</b>\n\n"
+        f"🔧 <i>Usernames are shown for your convenience, but the bot uses channel IDs internally.</i>"
     )
     
     keyboard = create_route_selection_keyboard(available_channels, step, page)
     await safe_edit_message(update, text, keyboard)
 
 async def complete_manual_route_creation(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int) -> None:
-    """Complete manual route creation"""
+    """Complete the manual route creation process"""
     try:
         state = manual_route_states[user_id]
-        source_key = state.get("source")
-        target_key = state.get("target")
+        source_id = state.get("source")  # 这是channel_id
+        target_id = state.get("target")  # 这是channel_id
+        source_display = state.get("source_display")  # 显示用
+        target_display = state.get("target_display")  # 显示用
         
-        if not source_key or not target_key:
+        if not source_id or not target_id:
             await safe_edit_message(update, "❌ Missing source or destination channel. Please start again.", get_navigation_keyboard())
             return
         
-        available_channels = state["available_channels"]
-        source_info = available_channels.get(source_key, {})
-        target_info = available_channels.get(target_key, {})
+        # 获取显示信息
+        available_channels = state.get("available_channels", {})
+        source_info = available_channels.get(source_display, {})
+        target_info = available_channels.get(target_display, {})
         
+        # 获取显示文本
+        source_display_text = f"@{source_info.get('username')}" if source_info.get('username') else f"ID: {source_info.get('id')}"
+        target_display_text = f"@{target_info.get('username')}" if target_info.get('username') else f"ID: {target_info.get('id')}"
+        
+        # 存储到用户设置（使用channel_id）
         user_id_str = str(user_id)
         refresh_user_settings()
         
@@ -4536,22 +4595,19 @@ async def complete_manual_route_creation(update: Update, context: ContextTypes.D
         
         routes = user_settings[user_id_str].get("routes", {})
         
-        if source_key not in routes:
-            routes[source_key] = []
+        if source_id not in routes:
+            routes[source_id] = []
         
-        if target_key not in routes[source_key]:
-            routes[source_key].append(target_key)
+        if target_id not in routes[source_id]:
+            routes[source_id].append(target_id)
             user_settings[user_id_str]["routes"] = routes
             save_settings()
-            
-            source_display = f"@{source_info['username']}" if source_info['username'] else f"{source_info['title']} (ID: {source_info['id']})"
-            target_display = f"@{target_info['username']}" if target_info['username'] else f"{target_info['title']} (ID: {target_info['id']})"
             
             text = (
                 f"✅ <b>Route Added Successfully!</b>\n\n"
                 f"🔄 <b>New Route:</b>\n"
-                f"📢 Source: {source_display}\n"
-                f"🎯 Destination: {target_display}\n\n"
+                f"📢 Source: {source_display_text}\n"
+                f"🎯 Destination: {target_display_text}\n\n"
                 f"💡 <b>What happens now:</b>\n"
                 f"• Messages from source will be forwarded to destination\n"
                 f"• No 'forwarded from' attribution\n"
@@ -4560,10 +4616,11 @@ async def complete_manual_route_creation(update: Update, context: ContextTypes.D
                 f"🔧 <b>Note:</b> Make sure the bot has permission to send messages in the destination channel!"
             )
             
-            log_activity(f"User {user_id} added route via selection: {source_display} → {target_display}")
+            log_activity(f"User {user_id} added route: {source_id} → {target_id}")
         else:
             text = f"⚠️ Route already exists."
         
+        # 清理状态
         if user_id in manual_route_states:
             del manual_route_states[user_id]
         
@@ -5735,17 +5792,53 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         elif data == "select_route_channels":
             await handle_select_route_channels(update, context)
         elif data.startswith("route_select_"):
-            parts = data.split("_")
-            step = parts[2]
-            channel_key = parts[3]
-            page = int(parts[4])
+            # Parse route selection callback data - handle underscores in channel keys
+            # Format: route_select_source_channelKey_page
+            # or: route_select_target_channelKey_page
+            parts = data.split("_", 3)  # Split only on first 3 underscores
+            if len(parts) < 4:
+                log_error(f"Invalid route_select callback data: {data}", None)
+                await query.answer("❌ Invalid callback data")
+                return
+            
+            step = parts[2]  # "source" or "target"
+            remaining = parts[3]  # channelKey_page
+            
+            # Split remaining part to get channel_key and page
+            remaining_parts = remaining.rsplit("_", 1)
+            if len(remaining_parts) != 2:
+                log_error(f"Invalid route_select remaining data: {remaining}", None)
+                await query.answer("❌ Invalid callback data")
+                return
+            
+            channel_key = remaining_parts[0]
+            try:
+                page = int(remaining_parts[1])
+            except ValueError:
+                log_error(f"Invalid page in route_select: {remaining_parts[1]}", None)
+                await query.answer("❌ Invalid page number")
+                return
+            
             await handle_route_channel_selection(update, context, step, channel_key, page)
+            
         elif data.startswith("route_"):
-            if "_page_" in data:
-                parts = data.split("_")
-                step = parts[1]
+            # Parse route pagination callback data
+            # Format: route_source_page_0 or route_target_page_0
+            parts = data.split("_")
+            if len(parts) != 4:
+                log_error(f"Invalid route pagination callback data: {data}", None)
+                await query.answer("❌ Invalid callback data")
+                return
+            
+            step = parts[1]  # "source" or "target"
+            try:
                 page = int(parts[3])
-                await handle_route_selection_pagination(update, context, step, page)
+            except ValueError:
+                log_error(f"Invalid page in route pagination: {parts[3]}", None)
+                await query.answer("❌ Invalid page number")
+                return
+            
+            await handle_route_selection_pagination(update, context, step, page)
         elif data == "manual_route_input":
             await handle_manual_channel_input(update, context, "source")
         

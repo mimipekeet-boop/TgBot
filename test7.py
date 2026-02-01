@@ -2816,7 +2816,7 @@ def create_channels_keyboard(channels: List[Dict], step: str, page: int = 0, ite
     if navigation_buttons:
         keyboard.append(navigation_buttons)
     
-    keyboard.append([InlineKeyboardButton("✏️ Enter Manually", callback_data=f"manual_input_{step}")])
+    # keyboard.append([InlineKeyboardButton("✏️ Enter Manually", callback_data=f"manual_input_{step}")])
     keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="menu_main")])
     
     return InlineKeyboardMarkup(keyboard)
@@ -3716,14 +3716,14 @@ async def handle_channel_selection_menu(update: Update, context: ContextTypes.DE
             "💡 <b>How to proceed:</b>\n"
             "• <b>Select Channels</b> - Browse and select from your channels\n"
             "• <b>Manage Channels</b> - Review and remove selected channels\n"
-            "• <b>Enter Manually</b> - Add channels by username or ID\n\n"
+            # "• <b>Enter Manually</b> - Add channels by username or ID\n\n"
             "🔧 <b>Note:</b> You need to be a member of the channels you want to monitor."
         )
         
         keyboard = [
             [InlineKeyboardButton("📋 Browse & Select Channels", callback_data="browse_channels")],
             [InlineKeyboardButton("⚙️ Manage Selected Channels", callback_data="menu_manage_channels")],
-            [InlineKeyboardButton("✏️ Enter Channel Manually", callback_data="manual_input_channels")],
+            # [InlineKeyboardButton("✏️ Enter Channel Manually", callback_data="manual_input_channels")],
             [InlineKeyboardButton("🔤 Keyword Filters", callback_data="menu_keyword_management")],
             [InlineKeyboardButton("🖼️ Media Filters", callback_data="menu_media_filters")],
             [InlineKeyboardButton("➕ Add Route", callback_data="menu_add_route")],
@@ -3755,12 +3755,12 @@ async def handle_browse_channels(update: Update, context: ContextTypes.DEFAULT_T
                 "• You haven't joined any channels with this account\n\n"
                 "🔧 <b>Solutions:</b>\n"
                 "• Join some public channels first\n"
-                "• Use 'Enter Channel Manually' to add channels by username/ID\n"
+                # "• Use 'Enter Channel Manually' to add channels by username/ID\n"
                 "• Make sure you're a member of the channels you want to monitor"
             )
             
             keyboard = [
-                [InlineKeyboardButton("✏️ Enter Channel Manually", callback_data="manual_input_channels")],
+                # [InlineKeyboardButton("✏️ Enter Channel Manually", callback_data="manual_input_channels")],
                 [InlineKeyboardButton("🔄 Try Again", callback_data="browse_channels")],
                 [InlineKeyboardButton("🏠 Main Menu", callback_data="menu_main")]
             ]
@@ -3960,14 +3960,14 @@ async def handle_manage_channels_menu(update: Update, context: ContextTypes.DEFA
                 "❌ No channels selected yet.\n\n"
                 "💡 <b>How to add channels:</b>\n"
                 "1. Use 📋 Select Channels to browse your channels\n"
-                "2. Or use ✏️ Enter Manually to add by username/ID\n"
+                # "2. Or use ✏️ Enter Manually to add by username/ID\n"
                 "3. Save your selection\n"
                 "4. Come back here to manage them"
             )
             
             keyboard = [
                 [InlineKeyboardButton("📋 Select Channels", callback_data="menu_select_channels")],
-                [InlineKeyboardButton("✏️ Enter Channel Manually", callback_data="manual_input_channels")],
+                # [InlineKeyboardButton("✏️ Enter Channel Manually", callback_data="manual_input_channels")],
                 [InlineKeyboardButton("🏠 Main Menu", callback_data="menu_main")]
             ]
             
@@ -4089,33 +4089,33 @@ async def handle_remove_all_channels(update: Update, context: ContextTypes.DEFAU
         await update.callback_query.answer("❌ No channels to remove")
         await safe_edit_message(update, "❌ No channels found to remove.", get_navigation_keyboard())
 
-async def handle_manual_channel_input(update: Update, context: ContextTypes.DEFAULT_TYPE, step: str) -> None:
-    """Handle manual channel input for various steps"""
-    user_id = update.callback_query.from_user.id
+# async def handle_manual_channel_input(update: Update, context: ContextTypes.DEFAULT_TYPE, step: str) -> None:
+#     """Handle manual channel input for various steps"""
+#     user_id = update.callback_query.from_user.id
     
-    route_creation_states[user_id] = {"step": step}
+#     route_creation_states[user_id] = {"step": step}
     
-    step_display = {
-        "source": "source",
-        "target": "destination", 
-        "channels": "channel"
-    }.get(step, step)
+#     step_display = {
+#         "source": "source",
+#         "target": "destination", 
+#         "channels": "channel"
+#     }.get(step, step)
     
-    text = (
-        f"✏️ <b>Enter {step_display.capitalize()} Channel</b>\n\n"
-        f"Please send me the {step_display} channel username or ID:\n\n"
-        "💡 <b>Accepted formats:</b>\n"
-        "• Username: <code>@channel_username</code> or <code>channel_username</code>\n"
-        "• Channel ID: <code>-1001234567890</code> or <code>1234567890</code>\n\n"
-        "🔧 <b>Note:</b>\n"
-        "• For private channels, use the numeric ID\n"
-        "• You must be a member of the channel\n"
-        "• The bot doesn't need to be in the channel\n\n"
-        "Send the channel username or ID now:"
-    )
+#     text = (
+#         f"✏️ <b>Enter {step_display.capitalize()} Channel</b>\n\n"
+#         f"Please send me the {step_display} channel username or ID:\n\n"
+#         "💡 <b>Accepted formats:</b>\n"
+#         "• Username: <code>@channel_username</code> or <code>channel_username</code>\n"
+#         "• Channel ID: <code>-1001234567890</code> or <code>1234567890</code>\n\n"
+#         "🔧 <b>Note:</b>\n"
+#         "• For private channels, use the numeric ID\n"
+#         "• You must be a member of the channel\n"
+#         "• The bot doesn't need to be in the channel\n\n"
+#         "Send the channel username or ID now:"
+#     )
     
-    keyboard = get_channel_selection_keyboard(step, user_id)
-    await safe_edit_message(update, text, keyboard)
+#     keyboard = get_channel_selection_keyboard(step, user_id)
+#     await safe_edit_message(update, text, keyboard)
 
 async def handle_channel_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle manual channel input from user"""
@@ -4187,7 +4187,7 @@ async def handle_channel_input(update: Update, context: ContextTypes.DEFAULT_TYP
                 f"You can now use it when creating routes.",
                 get_navigation_keyboard()
             )
-            log_activity(f"User {user_id} manually added channel: {channel_display}")
+            # log_activity(f"User {user_id} manually added channel: {channel_display}")
             
         elif step in ["source", "target"]:
             # Store for route creation
@@ -4337,7 +4337,7 @@ async def handle_add_route_menu(update: Update, context: ContextTypes.DEFAULT_TY
                 "❌ No channels available.\n\n"
                 "💡 <b>How to proceed:</b>\n"
                 "1. First, select some channels using 📋 Select Channels\n"
-                "2. Or add channels manually using ✏️ Enter Manually\n"
+                # "2. Or add channels manually using ✏️ Enter Manually\n"
                 "3. Save your channel selection\n"
                 "4. Then come back here to create routes\n\n"
                 "Routes connect source channels to destination channels for forwarding."
@@ -4345,7 +4345,7 @@ async def handle_add_route_menu(update: Update, context: ContextTypes.DEFAULT_TY
             
             keyboard = [
                 [InlineKeyboardButton("📋 Select Channels", callback_data="menu_select_channels")],
-                [InlineKeyboardButton("✏️ Enter Channel Manually", callback_data="manual_input_channels")],
+                # [InlineKeyboardButton("✏️ Enter Channel Manually", callback_data="manual_input_channels")],
                 [InlineKeyboardButton("🏠 Main Menu", callback_data="menu_main")]
             ]
             
@@ -4367,7 +4367,7 @@ async def handle_add_route_menu(update: Update, context: ContextTypes.DEFAULT_TY
         
         keyboard = [
             [InlineKeyboardButton("📋 Select from Available Channels", callback_data="select_route_channels")],
-            [InlineKeyboardButton("✏️ Enter Channels Manually", callback_data="manual_route_input")],
+            # [InlineKeyboardButton("✏️ Enter Channels Manually", callback_data="manual_route_input")],
             [InlineKeyboardButton("🔤 Keyword Filters", callback_data="menu_keyword_management")],
             [InlineKeyboardButton("🖼️ Media Filters", callback_data="menu_media_filters")],
             [InlineKeyboardButton("🏠 Main Menu", callback_data="menu_main")]
@@ -4457,10 +4457,10 @@ def create_route_selection_keyboard(available_channels: Dict, step: str, page: i
         keyboard.append(navigation_buttons)
     
     # Manual input buttons
-    if step == "source":
-        keyboard.append([InlineKeyboardButton("✏️ Enter Source Manually", callback_data="manual_input_source")])
-    else:
-        keyboard.append([InlineKeyboardButton("✏️ Enter Destination Manually", callback_data="manual_input_target")])
+    # if step == "source":
+    #     keyboard.append([InlineKeyboardButton("✏️ Enter Source Manually", callback_data="manual_input_source")])
+    # else:
+    #     keyboard.append([InlineKeyboardButton("✏️ Enter Destination Manually", callback_data="manual_input_target")])
     
     # Cancel button
     keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="menu_add_route")])
@@ -4556,81 +4556,81 @@ async def handle_route_selection_pagination(update: Update, context: ContextType
     keyboard = create_route_selection_keyboard(available_channels, step, page)
     await safe_edit_message(update, text, keyboard)
 
-async def complete_manual_route_creation(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int) -> None:
-    """Complete the manual route creation process"""
-    try:
-        state = manual_route_states[user_id]
-        source_id = state.get("source")  # 这是channel_id
-        target_id = state.get("target")  # 这是channel_id
-        source_display = state.get("source_display")  # 显示用
-        target_display = state.get("target_display")  # 显示用
+# async def complete_manual_route_creation(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int) -> None:
+#     """Complete the manual route creation process"""
+#     try:
+#         state = manual_route_states[user_id]
+#         source_id = state.get("source")  # 这是channel_id
+#         target_id = state.get("target")  # 这是channel_id
+#         source_display = state.get("source_display")  # 显示用
+#         target_display = state.get("target_display")  # 显示用
         
-        if not source_id or not target_id:
-            await safe_edit_message(update, "❌ Missing source or destination channel. Please start again.", get_navigation_keyboard())
-            return
+#         if not source_id or not target_id:
+#             await safe_edit_message(update, "❌ Missing source or destination channel. Please start again.", get_navigation_keyboard())
+#             return
         
-        # 获取显示信息
-        available_channels = state.get("available_channels", {})
-        source_info = available_channels.get(source_display, {})
-        target_info = available_channels.get(target_display, {})
+#         # 获取显示信息
+#         available_channels = state.get("available_channels", {})
+#         source_info = available_channels.get(source_display, {})
+#         target_info = available_channels.get(target_display, {})
         
-        # 获取显示文本
-        source_display_text = f"@{source_info.get('username')}" if source_info.get('username') else f"ID: {source_info.get('id')}"
-        target_display_text = f"@{target_info.get('username')}" if target_info.get('username') else f"ID: {target_info.get('id')}"
+#         # 获取显示文本
+#         source_display_text = f"@{source_info.get('username')}" if source_info.get('username') else f"ID: {source_info.get('id')}"
+#         target_display_text = f"@{target_info.get('username')}" if target_info.get('username') else f"ID: {target_info.get('id')}"
         
-        # 存储到用户设置（使用channel_id）
-        user_id_str = str(user_id)
-        refresh_user_settings()
+#         # 存储到用户设置（使用channel_id）
+#         user_id_str = str(user_id)
+#         refresh_user_settings()
         
-        if user_id_str not in user_settings:
-            user_settings[user_id_str] = {
-                "routes": {},
-                "forwarding": False,
-                "disabled_routes": {},
-                "available_channels": {},
-                "required_keywords": [],
-                "blocked_keywords": [],
-                "allowed_media_types": list(SUPPORTED_MEDIA_TYPES.keys()) + ["text"]
-            }
+#         if user_id_str not in user_settings:
+#             user_settings[user_id_str] = {
+#                 "routes": {},
+#                 "forwarding": False,
+#                 "disabled_routes": {},
+#                 "available_channels": {},
+#                 "required_keywords": [],
+#                 "blocked_keywords": [],
+#                 "allowed_media_types": list(SUPPORTED_MEDIA_TYPES.keys()) + ["text"]
+#             }
         
-        routes = user_settings[user_id_str].get("routes", {})
+#         routes = user_settings[user_id_str].get("routes", {})
         
-        if source_id not in routes:
-            routes[source_id] = []
+#         if source_id not in routes:
+#             routes[source_id] = []
         
-        if target_id not in routes[source_id]:
-            routes[source_id].append(target_id)
-            user_settings[user_id_str]["routes"] = routes
-            save_settings()
+#         if target_id not in routes[source_id]:
+#             routes[source_id].append(target_id)
+#             user_settings[user_id_str]["routes"] = routes
+#             save_settings()
             
-            text = (
-                f"✅ <b>Route Added Successfully!</b>\n\n"
-                f"🔄 <b>New Route:</b>\n"
-                f"📢 Source: {source_display_text}\n"
-                f"🎯 Destination: {target_display_text}\n\n"
-                f"💡 <b>What happens now:</b>\n"
-                f"• Messages from source will be forwarded to destination\n"
-                f"• No 'forwarded from' attribution\n"
-                f"• Instant deletion and editing sync enabled\n"
-                f"• Use 🚀 Start All to begin forwarding\n\n"
-                f"🔧 <b>Note:</b> Make sure the bot has permission to send messages in the destination channel!"
-            )
+#             text = (
+#                 f"✅ <b>Route Added Successfully!</b>\n\n"
+#                 f"🔄 <b>New Route:</b>\n"
+#                 f"📢 Source: {source_display_text}\n"
+#                 f"🎯 Destination: {target_display_text}\n\n"
+#                 f"💡 <b>What happens now:</b>\n"
+#                 f"• Messages from source will be forwarded to destination\n"
+#                 f"• No 'forwarded from' attribution\n"
+#                 f"• Instant deletion and editing sync enabled\n"
+#                 f"• Use 🚀 Start All to begin forwarding\n\n"
+#                 f"🔧 <b>Note:</b> Make sure the bot has permission to send messages in the destination channel!"
+#             )
             
-            log_activity(f"User {user_id} added route: {source_id} → {target_id}")
-        else:
-            text = f"⚠️ Route already exists."
+#             log_activity(f"User {user_id} added route: {source_id} → {target_id}")
+#         else:
+#             text = f"⚠️ Route already exists."
         
-        # 清理状态
-        if user_id in manual_route_states:
-            del manual_route_states[user_id]
+#         # 清理状态
+#         if user_id in manual_route_states:
+#             del manual_route_states[user_id]
         
-        await safe_edit_message(update, text, get_navigation_keyboard())
+#         await safe_edit_message(update, text, get_navigation_keyboard())
         
-    except Exception as e:
-        log_error(f"Error completing manual route creation for user {user_id}", e)
-        await safe_edit_message(update, "❌ An error occurred while creating the route. Please try again.", get_navigation_keyboard())
-        if user_id in manual_route_states:
-            del manual_route_states[user_id]
+#     except Exception as e:
+#         log_error(f"Error completing manual route creation for user {user_id}", e)
+#         await safe_edit_message(update, "❌ An error occurred while creating the route. Please try again.", get_navigation_keyboard())
+#         if user_id in manual_route_states:
+#             del manual_route_states[user_id]
 
 async def handle_list_routes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """List all routes for the user"""
@@ -5222,7 +5222,7 @@ async def handle_quick_add_menu(update: Update, context: ContextTypes.DEFAULT_TY
                 "❌ No channels available.\n\n"
                 "💡 <b>How to proceed:</b>\n"
                 "1. First, select some channels using 📋 Select Channels\n"
-                "2. Or add channels manually using ✏️ Enter Manually\n"
+                # "2. Or add channels manually using ✏️ Enter Manually\n"
                 "3. Save your channel selection\n"
                 "4. Then come back here to create routes quickly\n\n"
                 "Quick add allows you to enter source and destination channels in one go."
@@ -5230,7 +5230,7 @@ async def handle_quick_add_menu(update: Update, context: ContextTypes.DEFAULT_TY
             
             keyboard = [
                 [InlineKeyboardButton("📋 Select Channels", callback_data="menu_select_channels")],
-                [InlineKeyboardButton("✏️ Enter Channel Manually", callback_data="manual_input_channels")],
+                # [InlineKeyboardButton("✏️ Enter Channel Manually", callback_data="manual_input_channels")],
                 [InlineKeyboardButton("🏠 Main Menu", callback_data="menu_main")]
             ]
             
@@ -5839,8 +5839,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 return
             
             await handle_route_selection_pagination(update, context, step, page)
-        elif data == "manual_route_input":
-            await handle_manual_channel_input(update, context, "source")
+        # elif data == "manual_route_input":
+        #     await handle_manual_channel_input(update, context, "source")
         
         # Route toggling and pagination
         elif data.startswith("toggle_route_"):

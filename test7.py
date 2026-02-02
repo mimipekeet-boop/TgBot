@@ -3021,7 +3021,7 @@ def parse_route_callback_data(data: str, prefix: str) -> tuple:
         return None, 0
 
 def get_route_management_keyboard(routes_data, page: int = 0, items_per_page: int = 8):
-    """Create keyboard for route management with enable/disable toggles using checkboxes"""
+    """Create keyboard for route management with enable/disable toggles using checkboxes - MODIFIED to show usernames"""
     keyboard = []
     
     start_idx = page * items_per_page
@@ -3029,10 +3029,8 @@ def get_route_management_keyboard(routes_data, page: int = 0, items_per_page: in
     page_routes = list(routes_data.items())[start_idx:end_idx]
     
     for route_key, route_info in page_routes:
-        source_display = get_stored_key_display(route_info['source'])
-        target_display = get_stored_key_display(route_info['target'])
-        
-        display_name = f"{source_display} → {target_display}"
+        # Use the display names which now contain usernames instead of IDs
+        display_name = f"{route_info['source_display']} → {route_info['target_display']}"
         if len(display_name) > 28:
             display_name = display_name[:25] + "..."
         
@@ -3064,6 +3062,57 @@ def get_route_management_keyboard(routes_data, page: int = 0, items_per_page: in
         [InlineKeyboardButton("🖼️ Media Filters", callback_data="menu_media_filters")],
         [InlineKeyboardButton("✏️ Quick Add Route", callback_data="menu_quick_add")],
         [InlineKeyboardButton("🏠 Main Menu", callback_data="menu_main")]
+    ])
+    
+    return InlineKeyboardMarkup(keyboard)
+
+def get_route_deletion_keyboard(routes_data, selected_routes=None, page: int = 0):
+    """Create keyboard for route deletion with checkboxes that toggle on click - MODIFIED to show usernames"""
+    keyboard = []
+    
+    if selected_routes is None:
+        selected_routes = set()
+    
+    items_per_page = 8
+    start_idx = page * items_per_page
+    end_idx = start_idx + items_per_page
+    page_routes = list(routes_data.items())[start_idx:end_idx]
+    
+    for route_key, route_info in page_routes:
+        # Use the display names which now contain usernames instead of IDs
+        display_name = f"{route_info['source_display']} → {route_info['target_display']}"
+        if len(display_name) > 28:
+            display_name = display_name[:25] + "..."
+        
+        checkbox = "☑️" if route_key in selected_routes else "⬜"
+        display_name = f"{checkbox} {display_name}"
+        
+        callback_data = f"toggle_delete_{route_key}_{page}"
+        keyboard.append([InlineKeyboardButton(display_name, callback_data=callback_data)])
+    
+    navigation_buttons = []
+    total_pages = (len(routes_data) + items_per_page - 1) // items_per_page
+    
+    if page > 0:
+        navigation_buttons.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"delete_page_{page-1}"))
+    
+    if end_idx < len(routes_data):
+        navigation_buttons.append(InlineKeyboardButton("Next ➡️", callback_data=f"delete_page_{page+1}"))
+    
+    if navigation_buttons:
+        keyboard.append(navigation_buttons)
+    
+    selected_count = len(selected_routes)
+    keyboard.extend([
+        [InlineKeyboardButton(f"🗑 Delete Selected ({selected_count})", callback_data="confirm_deletion")],
+        [InlineKeyboardButton("✅ Select All", callback_data="select_all_routes")],
+        [InlineKeyboardButton("❌ Clear Selection", callback_data="clear_selection")],
+        [InlineKeyboardButton("📋 Select Channels", callback_data="menu_select_channels")],
+        [InlineKeyboardButton("⚙️ Manage Channels", callback_data="menu_manage_channels")],
+        [InlineKeyboardButton("🔤 Keyword Filters", callback_data="menu_keyword_management")],
+        [InlineKeyboardButton("🖼️ Media Filters", callback_data="menu_media_filters")],
+        [InlineKeyboardButton("✏️ Quick Add Route", callback_data="menu_quick_add")],
+        [InlineKeyboardButton("↩️ Back to Management", callback_data="menu_manage_routes")]
     ])
     
     return InlineKeyboardMarkup(keyboard)
@@ -4633,7 +4682,7 @@ async def complete_manual_route_creation(update: Update, context: ContextTypes.D
             del manual_route_states[user_id]
 
 async def handle_list_routes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """List all routes for the user"""
+    """List all routes for the user - MODIFIED to show usernames instead of IDs"""
     user_id = update.callback_query.from_user.id
     
     try:
@@ -4657,10 +4706,28 @@ async def handle_list_routes(update: Update, context: ContextTypes.DEFAULT_TYPE)
             enabled_routes = 0
             
             for source_key, targets in routes.items():
-                # Get source channel display name
+                # Get source channel display name - MODIFIED to prefer username
                 available_channels = user_settings.get("available_channels", {})
-                source_info = available_channels.get(source_key, {})
-                source_display = f"@{source_info.get('username', '')}" if source_info.get('username') else f"{source_info.get('title', 'Unknown')} (ID: {source_key})"
+                
+                # Try to get channel info by ID or username
+                source_info = None
+                source_display = f"ID: {source_key}"
+                
+                # Check if source_key is in available_channels (might be ID or username)
+                if source_key in available_channels:
+                    source_info = available_channels[source_key]
+                else:
+                    # Try to find by ID in available_channels
+                    for channel_key, channel_info in available_channels.items():
+                        if str(channel_info.get('id')) == source_key:
+                            source_info = channel_info
+                            break
+                
+                if source_info:
+                    if source_info.get('username'):
+                        source_display = f"@{source_info.get('username')}"
+                    else:
+                        source_display = f"{source_info.get('title', 'Unknown')}"
                 
                 target_lines = []
                 for target_key in targets:
@@ -4668,8 +4735,25 @@ async def handle_list_routes(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     is_disabled = route_key in disabled_routes
                     status = "⏸️" if is_disabled else "✅"
                     
-                    target_info = available_channels.get(target_key, {})
-                    target_display = f"@{target_info.get('username', '')}" if target_info.get('username') else f"{target_info.get('title', 'Unknown')} (ID: {target_key})"
+                    # Get target channel display name - MODIFIED to prefer username
+                    target_info = None
+                    target_display = f"ID: {target_key}"
+                    
+                    # Check if target_key is in available_channels (might be ID or username)
+                    if target_key in available_channels:
+                        target_info = available_channels[target_key]
+                    else:
+                        # Try to find by ID in available_channels
+                        for channel_key, channel_info in available_channels.items():
+                            if str(channel_info.get('id')) == target_key:
+                                target_info = channel_info
+                                break
+                    
+                    if target_info:
+                        if target_info.get('username'):
+                            target_display = f"@{target_info.get('username')}"
+                        else:
+                            target_display = f"{target_info.get('title', 'Unknown')}"
                     
                     target_lines.append(f"  {status} {target_display}")
                     total_routes += 1
@@ -4701,6 +4785,67 @@ async def handle_list_routes(update: Update, context: ContextTypes.DEFAULT_TYPE)
     except Exception as e:
         log_error(f"Error listing routes for user {user_id}", e)
         await safe_edit_message(update, "❌ An error occurred while loading routes.", get_navigation_keyboard())
+
+def _prepare_routes_data(user_settings: Dict) -> Dict:
+    """Prepare routes data for management display - MODIFIED to show usernames instead of IDs"""
+    routes_data = {}
+    routes = user_settings.get("routes", {})
+    disabled_routes = user_settings.get("disabled_routes", {})
+    available_channels = user_settings.get("available_channels", {})
+    
+    for source_key, targets in routes.items():
+        for target_key in targets:
+            route_key = f"{source_key}->{target_key}"
+            
+            # Get source channel display name - MODIFIED to prefer username
+            source_info = None
+            source_display = f"ID: {source_key}"
+            
+            # Check if source_key is in available_channels (might be ID or username)
+            if source_key in available_channels:
+                source_info = available_channels[source_key]
+            else:
+                # Try to find by ID in available_channels
+                for channel_key, channel_info in available_channels.items():
+                    if str(channel_info.get('id')) == source_key:
+                        source_info = channel_info
+                        break
+            
+            if source_info:
+                if source_info.get('username'):
+                    source_display = f"@{source_info.get('username')}"
+                else:
+                    source_display = f"{source_info.get('title', 'Unknown')}"
+            
+            # Get target channel display name - MODIFIED to prefer username
+            target_info = None
+            target_display = f"ID: {target_key}"
+            
+            # Check if target_key is in available_channels (might be ID or username)
+            if target_key in available_channels:
+                target_info = available_channels[target_key]
+            else:
+                # Try to find by ID in available_channels
+                for channel_key, channel_info in available_channels.items():
+                    if str(channel_info.get('id')) == target_key:
+                        target_info = channel_info
+                        break
+            
+            if target_info:
+                if target_info.get('username'):
+                    target_display = f"@{target_info.get('username')}"
+                else:
+                    target_display = f"{target_info.get('title', 'Unknown')}"
+            
+            routes_data[route_key] = {
+                'source': source_key,
+                'target': target_key,
+                'source_display': source_display,
+                'target_display': target_display,
+                'disabled': route_key in disabled_routes
+            }
+    
+    return routes_data
 
 async def handle_manage_routes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle route management menu"""
@@ -4756,29 +4901,110 @@ async def handle_manage_routes_menu(update: Update, context: ContextTypes.DEFAUL
         log_error(f"Error handling route management menu for user {user_id}", e)
         await safe_edit_message(update, "❌ An error occurred while loading route management.", get_navigation_keyboard())
 
-def _prepare_routes_data(user_settings: Dict) -> Dict:
-    """Prepare routes data for management display"""
-    routes_data = {}
-    routes = user_settings.get("routes", {})
-    disabled_routes = user_settings.get("disabled_routes", {})
-    available_channels = user_settings.get("available_channels", {})
+async def handle_list_routes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """List all routes for the user - MODIFIED to show usernames instead of IDs"""
+    user_id = update.callback_query.from_user.id
     
-    for source_key, targets in routes.items():
-        for target_key in targets:
-            route_key = f"{source_key}->{target_key}"
+    try:
+        user_settings = get_user_settings_fresh(user_id)
+        routes = user_settings.get("routes", {})
+        disabled_routes = user_settings.get("disabled_routes", {})
+        
+        if not routes:
+            text = (
+                "📋 <b>Your Routes</b>\n\n"
+                "❌ No routes found.\n\n"
+                "💡 <b>How to create routes:</b>\n"
+                "1. Use 📋 Select Channels to choose source channels\n"
+                "2. Use ➕ Add Route to create forwarding routes\n"
+                "3. Connect source channels to destination channels\n"
+                "4. Use 🚀 Start All to begin forwarding"
+            )
+        else:
+            lines = []
+            total_routes = 0
+            enabled_routes = 0
             
-            source_info = available_channels.get(source_key, {})
-            target_info = available_channels.get(target_key, {})
+            for source_key, targets in routes.items():
+                # Get source channel display name - MODIFIED to prefer username
+                available_channels = user_settings.get("available_channels", {})
+                
+                # Try to get channel info by ID or username
+                source_info = None
+                source_display = f"ID: {source_key}"
+                
+                # Check if source_key is in available_channels (might be ID or username)
+                if source_key in available_channels:
+                    source_info = available_channels[source_key]
+                else:
+                    # Try to find by ID in available_channels
+                    for channel_key, channel_info in available_channels.items():
+                        if str(channel_info.get('id')) == source_key:
+                            source_info = channel_info
+                            break
+                
+                if source_info:
+                    if source_info.get('username'):
+                        source_display = f"@{source_info.get('username')}"
+                    else:
+                        source_display = f"{source_info.get('title', 'Unknown')}"
+                
+                target_lines = []
+                for target_key in targets:
+                    route_key = f"{source_key}->{target_key}"
+                    is_disabled = route_key in disabled_routes
+                    status = "⏸️" if is_disabled else "✅"
+                    
+                    # Get target channel display name - MODIFIED to prefer username
+                    target_info = None
+                    target_display = f"ID: {target_key}"
+                    
+                    # Check if target_key is in available_channels (might be ID or username)
+                    if target_key in available_channels:
+                        target_info = available_channels[target_key]
+                    else:
+                        # Try to find by ID in available_channels
+                        for channel_key, channel_info in available_channels.items():
+                            if str(channel_info.get('id')) == target_key:
+                                target_info = channel_info
+                                break
+                    
+                    if target_info:
+                        if target_info.get('username'):
+                            target_display = f"@{target_info.get('username')}"
+                        else:
+                            target_display = f"{target_info.get('title', 'Unknown')}"
+                    
+                    target_lines.append(f"  {status} {target_display}")
+                    total_routes += 1
+                    if not is_disabled:
+                        enabled_routes += 1
+                
+                lines.append(f"📢 {source_display}:")
+                lines.extend(target_lines)
+                lines.append("")  # Empty line for spacing
             
-            routes_data[route_key] = {
-                'source': source_key,
-                'target': target_key,
-                'source_display': f"@{source_info.get('username', '')}" if source_info.get('username') else f"{source_info.get('title', 'Unknown')}",
-                'target_display': f"@{target_info.get('username', '')}" if target_info.get('username') else f"{target_info.get('title', 'Unknown')}",
-                'disabled': route_key in disabled_routes
-            }
-    
-    return routes_data
+            text = (
+                f"📋 <b>Your Routes</b>\n\n"
+                f"📊 Total Routes: <b>{total_routes}</b>\n"
+                f"✅ Enabled: <b>{enabled_routes}</b>\n"
+                f"⏸️ Disabled: <b>{total_routes - enabled_routes}</b>\n\n" +
+                "\n".join(lines) +
+                f"\n💡 Use ⚙️ Manage Routes to enable/disable specific routes."
+            )
+        
+        keyboard = [
+            [InlineKeyboardButton("⚙️ Manage Routes", callback_data="menu_manage_routes")],
+            [InlineKeyboardButton("➕ Add More Routes", callback_data="menu_add_route")],
+            [InlineKeyboardButton("✏️ Quick Add Route", callback_data="menu_quick_add")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="menu_main")]
+        ]
+        
+        await safe_edit_message(update, text, InlineKeyboardMarkup(keyboard))
+        
+    except Exception as e:
+        log_error(f"Error listing routes for user {user_id}", e)
+        await safe_edit_message(update, "❌ An error occurred while loading routes.", get_navigation_keyboard())
 
 async def handle_route_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE, route_key: str, page: int) -> None:
     """Toggle route enabled/disabled state"""
